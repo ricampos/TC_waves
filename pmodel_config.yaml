@@ -1,0 +1,61 @@
+# Configuration file
+
+pmodel_path: /home/ricardo/work/noaa/analysis/TC_Waves/modeling/PModel
+
+pmwdiagrams_path: /home/ricardo/work/noaa/analysis/TC_Waves/modeling/PModel/PModel_WaveDiagrams.nc
+
+output_path: /home/ricardo/work/noaa/analysis/TC_Waves/modeling/PModel/output
+
+# Coefficients:
+pmcoeff_a: 0.54
+pmcoeff_b: -169.0
+pmcoeff_c: -1442.0
+pmcoeff_d: 0.3
+pmcoeff_e: 14.3
+pmcoeff_f: -43.0
+pmcoeff_g: 9600.0
+pmcoeff_h: 4470.0
+pmcoeff_i: 100000.0
+pmcoeff_C: 0.1
+
+# Combination of parameters associated with the vortexes previously run:
+# Max wind speed
+Vmax_runs:
+- 17
+- 30
+- 40
+- 50
+- 65
+- 78
+
+# delta-pressure
+Dp_runs:
+- 10
+- 30
+- 50
+- 70
+- 110
+- 150                                          
+
+# velocity of forward motion
+Vfm_runs:
+- 0.0
+- 2.5
+- 5.0
+- 7.5
+- 10.0
+- 12.5
+- 15.0
+
+# 34knots wind Radius
+R34_runs:
+- 200
+- 300
+- 400
+
+# Max wind Radius
+R_runs:
+- 15
+- 30
+- 60
+
