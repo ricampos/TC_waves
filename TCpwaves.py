@@ -6,6 +6,7 @@ TCpwaves.py
 
 VERSION AND LAST UPDATE:
  v1.0  05/07/2025
+ v1.1  05/20/2025
 
 PURPOSE:
  Tropical Cyclone Parametric Wave Fields.
@@ -15,12 +16,6 @@ PURPOSE:
  Rmax: Radius of maximum winds (m)
  R34: Radius of gale (34 kt) winds (m)
  The position Lat/Lon must also be given.
- The script follows the paper:
-  Grossmann-Matheson, G., Young, I.R., Meucci, A., Alves,J.-H., Tamizi, A., 2025.
-  A model for the spatial distribution of ocean wave parameters in tropical cyclones. Ocean Engineering.
-  https://doi.org/10.1016/j.oceaneng.2024.120091
- This python version is based on the Matlab code given by
-  https://doi.org/10.26188/27237156 , and great support provided by Guisela Grossmann-Matheson
 
 USAGE:
  The configuration file pmodel_config.yaml has the coefficients, parameters, and also provides
@@ -34,9 +29,12 @@ USAGE:
 
  Auxiliary functions:
   read
+  read_mcrall
+  read_atcf
   bearing
   cbearing
   ctrack
+  wplot
  Class TCWaves
  Functions:
   PWModel
@@ -45,9 +43,14 @@ USAGE:
   blend
   hwplot
 
- The explanation for each function is contained in the headers, including
-  examples,
- help(TCpwaves)
+ The explanation for each function is contained in the headers, including examples, help(TCpwaves)
+
+ The function PWModel below, regarding the parametric wave model, follows the paper:
+  Grossmann-Matheson, G., Young, I.R., Meucci, A., Alves,J.-H., Tamizi, A., 2025.
+  A model for the spatial distribution of ocean wave parameters in tropical cyclones. Ocean Engineering.
+  https://doi.org/10.1016/j.oceaneng.2024.120091
+  The function PWModel is based on the Matlab code given by
+  https://doi.org/10.26188/27237156 , and great support provided by Guisela Grossmann-Matheson
 
 OUTPUT:
  Wave information (Hs and Tp) for the given cyclones.
@@ -57,6 +60,7 @@ DEPENDENCIES:
 
 AUTHOR and DATE:
  05/07/2025: Ricardo M. Campos, first version.
+ 05/20/2025: Ricardo M. Campos, new auxiliar functions to read NHC tracks and TC data
 
 PERSON OF CONTACT:
  Ricardo M Campos: ricardo.campos@noaa.gov
@@ -64,7 +68,7 @@ PERSON OF CONTACT:
 """
 
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -73,6 +77,8 @@ from geopy.distance import distance
 from geopy.point import Point
 from scipy.interpolate import griddata
 from scipy.interpolate import RegularGridInterpolator
+from datetime import datetime
+import pandas as pd
 import cartopy
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -81,6 +87,7 @@ from mpl_toolkits.basemap import cm
 colormap = cm.GMT_polar
 palette = plt.cm.jet
 palette.set_bad('aqua', 1.0)
+import warnings; warnings.filterwarnings("ignore")
 
 # Font size and style
 sl=13
@@ -101,6 +108,113 @@ def read(wdname):
 
     return wconfig, ds
     del wconfig
+
+
+def read_mcrall(fdate,fpath):
+    '''
+    Read Monte Carlo wind speed probability realization files mcrall.
+    '''
+    # fdate = "2022092400"
+    # Time
+    if isinstance(fdate, str):
+        dt = datetime.strptime(fdate, "%Y%m%d%H")
+        t = datetime.strptime(fdate, "%Y%m%d%H").timestamp()
+    elif isinstance(fdate, float):
+        t = float(fdate)
+        dt = datetime.fromtimestamp(t)
+    elif isinstance(fdate, datetime):
+        dt = fdate
+        t = datetime.strptime(fdate, "%Y%m%d%H").timestamp()
+
+    fname = "mcrall_al"+dt.strftime("%m")+dt.strftime("%Y")+"_"+dt.strftime("%m")+dt.strftime("%d")+dt.strftime("%H")+".feather"
+    # read data
+    tcs = pd.read_feather(fpath+"/"+fname) 
+    idx = np.array(tcs['idx'].values)
+    flt = np.array(tcs['tau'].values) # forecast lead time
+    aVmax = np.array(tcs['vmx'].values)/1.94384
+    aRmax = np.array(tcs['rmw'].values)*1852.
+    aR34 = np.array(tcs['r34q1'].values+tcs['r34q2'].values+tcs['r34q3'].values+tcs['r34q4'].values)/4.
+    aVfm = np.array(tcs['spd'].values)/1.94384
+    alat = np.array(tcs['lat'].values)
+    alon = np.array(tcs['lon'].values)
+    del tcs
+
+    alon[alon<0.]=alon[alon<0.]+360.
+
+    # Reshape and organize
+    idx=np.unique(idx)
+    flt=np.unique(flt)
+    ftime = np.array(flt*3600.+t).astype('double')
+    dtime = [datetime.fromtimestamp(t) for t in ftime]
+    Vmax=np.reshape(aVmax,(len(idx),len(flt)))
+    Rmax=np.reshape(aRmax,(len(idx),len(flt)))
+    R34=np.reshape(aR34,(len(idx),len(flt)))
+    Vfm=np.reshape(aVfm,(len(idx),len(flt)))
+    lat=np.reshape(alat,(len(idx),len(flt)))
+    lon=np.reshape(alon,(len(idx),len(flt)))
+
+    result={'idx':idx,'flt':flt,'time':ftime,'dtime':dtime,
+    'Vmax':Vmax,'Rmax':Rmax,'R34':R34,'Vfm':Vfm,
+    'lat':lat, 'lon':lon}
+
+    return result
+
+
+def read_atcf(fname):
+    '''
+    Read Automated Tropical Cyclone Forecast (ATCF) Archive Data Files / Text Files
+    https://web.uwm.edu/hurricane-models/models/models.html
+    https://ftp.nhc.noaa.gov/atcf/archive/2024/
+    https://ftp.nhc.noaa.gov/atcf/archive/README
+      wind speed in knots
+      pressure in hPa
+    '''
+    # GFSO: GFS
+    # GEFS control: AC00
+    # GEFS perturbed members: AP01 02 ..
+
+    models = {}
+
+    with open(fname, 'r') as f:
+        lines = f.readlines()
+    
+    for line in lines:
+        parts = [p.strip() for p in line.split(',')]
+        if len(parts) < 10:
+            continue
+
+        basin = parts[0]
+        storm_num = parts[1]
+        init_time_str = parts[2]
+        model = parts[4]
+        fhr = int(parts[5])
+        lat_str = parts[6]
+        lon_str = parts[7]
+        wind = int(parts[8])
+        pres = int(parts[9]) if parts[9].isdigit() else None
+
+        # Convert lat/lon from N/S/E/W to float
+        lat = float(lat_str[:-1]) / 10.0 * (-1 if lat_str[-1] == 'S' else 1)
+        lon = float(lon_str[:-1]) / 10.0 * (-1 if lon_str[-1] == 'W' else 1)
+
+        # Convert init and forecast time
+        init_time = pd.to_datetime(init_time_str, format='%Y%m%d%H')
+        valid_time = init_time + pd.Timedelta(hours=fhr)
+
+        # Initialize model dict
+        if model not in models:
+            models[model] = []
+
+        # Append forecast info
+        models[model].append((init_time, fhr, valid_time, lat, lon, wind, pres))
+
+    # Convert to DataFrames
+    for model in models:
+        models[model] = pd.DataFrame(models[model], columns=['init_time', 'fhr', 'time', 'lat', 'lon', 'wind', 'pres'])
+
+    return models
+    # ind = np.where(model['AC00']['init_time']=='2024-09-25T06:00:00.000000000')[0]
+    # ctrack(np.array(model['AC00']['lat'][ind]),np.array(model['AC00']['lon'][ind]),model['AC00']['time'][ind],np.array(model['AC00']['wind'][ind]),flabel="test_AC",ftitle="test_AC")
 
 
 def bearing(lat1, lon1, lat2, lon2):
@@ -139,10 +253,18 @@ def cbearing(alat,alon):
     return avg_dir_deg
 
 
-def ctrack(alat,alon,atime,aVmax,flabel="no",ftitle="no"):
+
+# ---- Visualization Functions ----
+
+def ctrack(alat,alon,atime,aVmax,flabel="no",ftitle="no",style=1):
     """
     Plot cyclone tracks and save the figure, based on arrays of lat, lon, time, and aVmax (in knots)
     """
+
+    alat = np.atleast_2d(alat); alon = np.atleast_2d(alon)
+    aVmax = np.atleast_2d(aVmax)
+
+    alon[alon>180]=alon[alon>180]-360.
 
     # aVmax must be in knots
     fig = plt.figure(figsize=(10, 6))
@@ -154,48 +276,61 @@ def ctrack(alat,alon,atime,aVmax,flabel="no",ftitle="no"):
     ax.add_feature(cfeature.OCEAN, facecolor='lightblue')
     ax.gridlines(draw_labels=True, linestyle='--', color='gray', alpha=0.5)
 
-    ax.plot(alon, alat, color='white', linewidth=3,zorder=3)
-    ax.plot(alon, alat, color='silver', linewidth=1,zorder=3)
+    if style==1:
 
-    for i in range(0,len(alat)):
+        for i in range(0,alat.shape[0]):
 
-        if atime[i].hour == 0:
-            # https://www.nhc.noaa.gov/aboutsshws.php
-            if aVmax[i]<34:
-                ax.plot(alon[i], alat[i], marker='o', color='navy', linewidth=1,zorder=2)
-            if aVmax[i]>=34 and aVmax[i]<48:
-                ax.plot(alon[i], alat[i], marker='o', color='darkgreen', linewidth=1,zorder=2)
-            if aVmax[i]>=48 and aVmax[i]<64:
-                ax.plot(alon[i], alat[i], marker='o', color='gold', linewidth=1,zorder=2)
-            if aVmax[i]>=64 and aVmax[i]<83:
-                ax.plot(alon[i], alat[i], marker='o', color='orange', linewidth=1,zorder=4)
-            if aVmax[i]>=83 and aVmax[i]<96:
-                ax.plot(alon[i], alat[i], marker='o', color='darkorange', linewidth=1,zorder=4)
-            if aVmax[i]>=96 and aVmax[i]<113:
-                ax.plot(alon[i], alat[i], marker='o', color='red', linewidth=1,zorder=5)
-            if aVmax[i]>=113 and aVmax[i]<137:
-                ax.plot(alon[i], alat[i], marker='o', color='firebrick', linewidth=1,zorder=5)
-            if aVmax[i]>=137:
-                ax.plot(alon[i], alat[i], marker='o', color='darkred', linewidth=1,zorder=5)
+            ax.plot(alon[i,:], alat[i,:], color='white', linewidth=2,zorder=1)
+            ax.plot(alon[i,:], alat[i,:], color='silver', linewidth=1,zorder=1)
 
-            ax.text(alon[i] + 0.2, alat[i] + 0.2, str(atime[i].strftime('%b%d')), fontsize=9, zorder=6)
-        else:
-            if aVmax[i]<34:
-                ax.plot(alon[i], alat[i], marker='.', color='navy', linewidth=2,zorder=2)
-            if aVmax[i]>=34 and aVmax[i]<48:
-                ax.plot(alon[i], alat[i], marker='.', color='darkgreen', linewidth=2,zorder=2)
-            if aVmax[i]>=48 and aVmax[i]<64:
-                ax.plot(alon[i], alat[i], marker='.', color='gold', linewidth=2,zorder=2)
-            if aVmax[i]>=64 and aVmax[i]<83:
-                ax.plot(alon[i], alat[i], marker='.', color='orange', linewidth=2,zorder=4)
-            if aVmax[i]>=83 and aVmax[i]<96:
-                ax.plot(alon[i], alat[i], marker='.', color='darkorange', linewidth=2,zorder=4)
-            if aVmax[i]>=96 and aVmax[i]<113:
-                ax.plot(alon[i], alat[i], marker='.', color='red', linewidth=2,zorder=5)
-            if aVmax[i]>=113 and aVmax[i]<137:
-                ax.plot(alon[i], alat[i], marker='.', color='firebrick', linewidth=2,zorder=5)
-            if aVmax[i]>=137:
-                ax.plot(alon[i], alat[i], marker='.', color='darkred', linewidth=2,zorder=5)
+            for j in range(0,alat.shape[1]):
+
+                if atime[j].hour == 0:
+                    # https://www.nhc.noaa.gov/aboutsshws.php
+                    if aVmax[i,j]<34:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='navy', linewidth=1,zorder=2)
+                    if aVmax[i,j]>=34 and aVmax[i,j]<48:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='darkgreen', linewidth=1,zorder=2)
+                    if aVmax[i,j]>=48 and aVmax[i,j]<64:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='gold', linewidth=1,zorder=2)
+                    if aVmax[i,j]>=64 and aVmax[i,j]<83:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='orange', linewidth=1,zorder=4)
+                    if aVmax[i,j]>=83 and aVmax[i,j]<96:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='darkorange', linewidth=1,zorder=4)
+                    if aVmax[i,j]>=96 and aVmax[i,j]<113:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='red', linewidth=1,zorder=5)
+                    if aVmax[i,j]>=113 and aVmax[i,j]<137:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='firebrick', linewidth=1,zorder=5)
+                    if aVmax[i,j]>=137:
+                        ax.plot(alon[i,j], alat[i,j], marker='o', color='darkred', linewidth=1,zorder=5)
+
+                    if i==0:
+                        ax.text(alon[i,j] + 0.2, alat[i,j] + 0.2, str(atime[j].strftime('%b%d')), fontsize=9, zorder=6)
+                else:
+                    if aVmax[i,j]<34:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='navy', linewidth=2,zorder=2)
+                    if aVmax[i,j]>=34 and aVmax[i,j]<48:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='darkgreen', linewidth=2,zorder=2)
+                    if aVmax[i,j]>=48 and aVmax[i,j]<64:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='gold', linewidth=2,zorder=2)
+                    if aVmax[i,j]>=64 and aVmax[i,j]<83:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='orange', linewidth=2,zorder=4)
+                    if aVmax[i,j]>=83 and aVmax[i,j]<96:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='darkorange', linewidth=2,zorder=4)
+                    if aVmax[i,j]>=96 and aVmax[i,j]<113:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='red', linewidth=2,zorder=5)
+                    if aVmax[i,j]>=113 and aVmax[i,j]<137:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='firebrick', linewidth=2,zorder=5)
+                    if aVmax[i,j]>=137:
+                        ax.plot(alon[i,j], alat[i,j], marker='.', color='darkred', linewidth=2,zorder=5)
+
+            print("  - ctrack : track "+repr(i)+" ok")
+
+    else:
+
+        for i in range(0,alat.shape[0]):
+            ax.plot(alon[i,:], alat[i,:], color='firebrick', linewidth=1,zorder=1)
+            print("  - ctrack : track "+repr(i)+" ok")
 
     if ftitle=="no":
         ax.set_title("Cyclone Track")
@@ -210,6 +345,51 @@ def ctrack(alat,alon,atime,aVmax,flabel="no",ftitle="no"):
 
     plt.savefig(figname, dpi=300, facecolor='w', edgecolor='w',
         orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+
+    plt.close(fig)
+
+
+def wplot(lat,lon,W,wvar="Hs",flabel="no",ftitle="no"):
+    """
+    Plot and save figure, single time and fixed domain
+    """
+    lon[lon<0.]=lon[lon<0.]+360
+    levels=np.array(np.arange(0,19,1)).astype('int')
+    if str(wvar).upper()=="HS":       
+        btitle=str(wvar)+" (m)"
+    elif str(wvar).upper()=="TP":
+        btitle=str(wvar)+" (s)"
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax.set_extent([lon.min()-0.1,lon.max()+0.1,lat.min()-0.1,lat.max()+0.1], crs=ccrs.PlateCarree())
+    ax.coastlines(resolution='10m', linewidth=1)
+    ax.add_feature(cfeature.BORDERS, linewidth=0.5)
+    ax.add_feature(cfeature.STATES, linewidth=0.5)
+    ax.add_feature(cfeature.LAND, facecolor='lightgray')
+    ax.add_feature(cfeature.OCEAN, facecolor='white')
+    ax.gridlines(draw_labels=True, linestyle='--', color='gray', alpha=0.5)
+    cs=ax.contourf(lon,lat,W,levels,cmap=palette,extend="max", zorder=1,transform = ccrs.PlateCarree())
+    if ftitle=="no":
+        ax.set_title(btitle)
+    else:
+        ax.set_title(btitle+ftitle)
+
+    plt.tight_layout()
+    ax = plt.gca(); pos = ax.get_position()
+    l, b, w, h = pos.bounds
+    cax = plt.axes([l+0.07, b-0.07, w-0.12, 0.025]) # setup colorbar axes.
+    cbar=plt.colorbar(cs,cax=cax, orientation='horizontal'); cbar.ax.tick_params(labelsize=10)
+    plt.axes(ax); plt.tight_layout()
+    if flabel=="no":
+        figname="W_"+str(wvar)+".png"
+    else:
+        figname="W_"+str(wvar)+"_"+flabel+".png"
+
+    plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
+        orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+
+    plt.close(fig)
 
 
 
@@ -321,7 +501,7 @@ class TCWaves:
         return pwm
 
 
-    def rotate(self,pwm,rangle):
+    def rotate(self,pwm,rangle,wvar="all"):
         """
         Rotate the vortex based on the propagation heading (rangle).
         """
@@ -348,15 +528,27 @@ class TCWaves:
         gdist[gdist>mdist]=np.nan; gdist=gdist/gdist
 
         # Interpolate onto the original lat/lon grid
-        for i in range(0,len(self.wvar)):
-            value = griddata(rotated_points, np.array(pwm[self.wvar[i]]*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
-            pwm[self.wvar[i]]=value
-            del value
+        if wvar=="all":
+            for i in range(0,len(self.wvar)):
+                value = griddata(rotated_points, np.array(pwm[self.wvar[i]]*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
+                pwm[self.wvar[i]]=value
+                del value
+
+        else:
+            if str(wvar).upper()=="HS" or str(wvar).upper()=="SWH":
+                value = griddata(rotated_points, np.array(pwm['Hs']*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
+                pwm['Hs']=value
+                del value
+
+            elif str(wvar).upper()=="TP":
+                value = griddata(rotated_points, np.array(pwm['Tp']*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
+                pwm['Tp']=value
+                del value
 
         return pwm
 
 
-    def blend(self,pwm,W):
+    def blend(self,pwm,W,wvar="all"):
         """
         Interpolate and blend the vortexes onto a fixed given grid.
         """
@@ -366,18 +558,23 @@ class TCWaves:
         tcgrid = np.column_stack((pwm['lat'].ravel(), auxlon.ravel()))
         flat_grid, flon_grid = np.meshgrid(W['lat'], W['lon'], indexing='ij')
         target_grid = np.column_stack((flat_grid.ravel(), flon_grid.ravel()))
-
-        WFHs = griddata(tcgrid, pwm['Hs'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Hs'].shape)
-        WFTp = griddata(tcgrid, pwm['Tp'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Tp'].shape)
-        WFUwnd = griddata(tcgrid, pwm['Uwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Uwnd'].shape)
-        WFVwnd = griddata(tcgrid, pwm['Vwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Vwnd'].shape)
-
-        WW={'lat':W['lat'],'lon':W['lon'],'Hs':WFHs, 'Tp':WFTp, 'Uwnd':WFUwnd, 'Vwnd':WFVwnd}
+        if wvar=="all":
+            WFHs = griddata(tcgrid, pwm['Hs'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Hs'].shape)
+            WFTp = griddata(tcgrid, pwm['Tp'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Tp'].shape)
+            WFUwnd = griddata(tcgrid, pwm['Uwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Uwnd'].shape)
+            WFVwnd = griddata(tcgrid, pwm['Vwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Vwnd'].shape)
+            WW={'lat':W['lat'],'lon':W['lon'],'Hs':WFHs, 'Tp':WFTp, 'Uwnd':WFUwnd, 'Vwnd':WFVwnd}
+        else:
+            if str(wvar).upper()=="HS" or str(wvar).upper()=="SWH":
+                WFHs = griddata(tcgrid, pwm['Hs'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Hs'].shape)
+                WW={'lat':W['lat'],'lon':W['lon'],'Hs':WFHs}
+            elif str(wvar).upper()=="TP":
+                WFTp = griddata(tcgrid, pwm['Tp'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Tp'].shape)
+                WW={'lat':W['lat'],'lon':W['lon'],'Tp':WFTp}
 
         return pwm,WW
 
-
-    def hwplot(self,pwm,WW,flabel="no",ftitle="no"):
+    def hwplot(self,pwm,WW,wvar="Hs",flabel="no",ftitle="no"):
         """
         Plot and save figures (Hs and Tp), for both the cyclones (following) and the large domain (fixed).
         """
@@ -386,7 +583,8 @@ class TCWaves:
         lmax = np.maximum(int(np.ceil(np.nanmax(pwm['Hs']))),8)
         levels=np.array(np.arange(0,lmax+1,1)).astype('int')
         plt.figure(figsize=(6,6))
-        ax = plt.axes(projection=ccrs.PlateCarree())
+        # ax = plt.axes(projection=ccrs.PlateCarree())
+        ax = plt.axes(projection=ccrs.Mercator())
         ax.set_extent([pwm['lon'].min()-0.1,pwm['lon'].max()+0.1,pwm['lat'].min()-0.1,pwm['lat'].max()+0.1], crs=ccrs.PlateCarree())
         gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True, linewidth=0.5, color='grey', alpha=0.5, linestyle='--', zorder=3)
         gl.xlabel_style = {'size': 9, 'color': 'k','rotation':0}; gl.ylabel_style = {'size': 9, 'color': 'k','rotation':0}
@@ -415,27 +613,28 @@ class TCWaves:
         plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
             orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
 
-        # Tp
-        lmax = np.maximum(int(np.ceil(np.nanmax(pwm['Tp']))),8)
-        levels=np.array(np.arange(0,lmax+1,1)).astype('int')
-        cs=ax.contourf(pwm['lon'],pwm['lat'],pwm['Tp'],levels,cmap=palette,extend="max", zorder=1,transform = ccrs.PlateCarree())
-        if ftitle=="no":
-            ax.set_title("Tp (s)")
-        else:
-            ax.set_title("Tp (s) "+ftitle)
+        if str(wvar).upper()!="HS":
+            # Tp
+            lmax = np.maximum(int(np.ceil(np.nanmax(pwm['Tp']))),8)
+            levels=np.array(np.arange(0,lmax+1,1)).astype('int')
+            cs=ax.contourf(pwm['lon'],pwm['lat'],pwm['Tp'],levels,cmap=palette,extend="max", zorder=1,transform = ccrs.PlateCarree())
+            if ftitle=="no":
+                ax.set_title("Tp (s)")
+            else:
+                ax.set_title("Tp (s) "+ftitle)
 
-        plt.tight_layout()
-        cbar=plt.colorbar(cs,cax=cax, orientation='horizontal'); cbar.ax.tick_params(labelsize=10)
-        plt.axes(ax); plt.tight_layout()
-        if flabel=="no":
-            figname="TCw_Tp.png"
-        else:
-            figname="TCw_Tp_"+flabel+".png"
+            plt.tight_layout()
+            cbar=plt.colorbar(cs,cax=cax, orientation='horizontal'); cbar.ax.tick_params(labelsize=10)
+            plt.axes(ax); plt.tight_layout()
+            if flabel=="no":
+                figname="TCw_Tp.png"
+            else:
+                figname="TCw_Tp_"+flabel+".png"
 
-        plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
-            orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+            plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
+                orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
 
-        plt.close('all'); del ax
+            plt.close('all'); del ax
 
         # Plot Fixed Domain ---
         # Hs
@@ -469,26 +668,27 @@ class TCWaves:
         plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
             orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
 
-        # Tp
-        lmax = np.maximum(int(np.ceil(np.nanmax(WW['Tp']))),8)
-        levels=np.array(np.arange(0,lmax+1,1)).astype('int')
-        cs=ax.contourf(lonp,WW['lat'],WW['Tp'],levels=levels,cmap='jet',zorder=1,extend="max",transform = ccrs.PlateCarree())
-        plt.tight_layout()
-        cbar = plt.colorbar(cs,cax=cax, orientation='horizontal', format='%g')
-        if ftitle=="no":
-            ax.set_title("Tp (s)")
-        else:
-            ax.set_title("Tp (s) "+ftitle)
+        if str(wvar).upper()!="HS":
+            # Tp
+            lmax = np.maximum(int(np.ceil(np.nanmax(WW['Tp']))),8)
+            levels=np.array(np.arange(0,lmax+1,1)).astype('int')
+            cs=ax.contourf(lonp,WW['lat'],WW['Tp'],levels=levels,cmap='jet',zorder=1,extend="max",transform = ccrs.PlateCarree())
+            plt.tight_layout()
+            cbar = plt.colorbar(cs,cax=cax, orientation='horizontal', format='%g')
+            if ftitle=="no":
+                ax.set_title("Tp (s)")
+            else:
+                ax.set_title("Tp (s) "+ftitle)
 
-        plt.axes(ax); plt.tight_layout()
-        if flabel=="no":
-            figname="Wfield_Tp.png"
-        else:
-            figname="Wfield_Tp_"+flabel+".png"
+            plt.axes(ax); plt.tight_layout()
+            if flabel=="no":
+                figname="Wfield_Tp.png"
+            else:
+                figname="Wfield_Tp_"+flabel+".png"
 
-        plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
-            orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+            plt.savefig(figname, dpi=200, facecolor='w', edgecolor='w',
+                orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
 
-        plt.close('all'); del ax
+            plt.close('all'); del ax
 
 
