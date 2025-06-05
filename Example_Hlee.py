@@ -42,7 +42,7 @@ if __name__ == "__main__":
     alon = np.array(np.array(dfibtr['LON'].values[:,0]).astype('float'))
     aVmax = np.array(np.array(dfibtr['USA_WIND'].values[:,0]).astype('float')) # wind in knots
     aVfm = np.array(dfibtr['STORM_SPEED'].values[:,0])/1.94384
-    aRmax = np.array(dfibtr['USA_RMW'].values[:,0])*1.852*1000.
+    aRmax = np.array(dfibtr['USA_RMW'].values[:,0])*1852.
     aR34 = np.mean(np.array([dfibtr['USA_R34_NE'].values[:,0],dfibtr['USA_R34_SE'].values[:,0],
         dfibtr['USA_R34_SW'].values[:,0],dfibtr['USA_R34_NW'].values[:,0]]).astype('float'),axis=0)*1.852*1000.
 
