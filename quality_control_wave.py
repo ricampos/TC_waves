@@ -158,7 +158,11 @@ def rate_of_change(wdic):
 
             if i-j>=0:
 
-                dist1 = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (wdic['latitude'][i-j], wdic['longitude'][i-j]), unit=Unit.KILOMETERS))
+                if len(wdic['latitude'])>1 and len(wdic['longitude'])>1:
+                    dist1 = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (wdic['latitude'][i-j], wdic['longitude'][i-j]), unit=Unit.KILOMETERS))
+                else:
+                    dist1 = 0.
+
                 dtime1 = float(wdic['time'][i]-wdic['time'][i-j])/3600
 
                 dmhs1=wdic['hs'][i]-wdic['hs'][i-j]
@@ -178,7 +182,11 @@ def rate_of_change(wdic):
             # Spiking Test
             if qf==0 and i+k<len(wdic['time']):
 
-                dist2 = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (wdic['latitude'][i+k], wdic['longitude'][i+k]), unit=Unit.KILOMETERS))
+                if len(wdic['latitude'])>1 and len(wdic['longitude'])>1:
+                    dist2 = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (wdic['latitude'][i+k], wdic['longitude'][i+k]), unit=Unit.KILOMETERS))
+                else:
+                    dist2 = 0.
+
                 dtime2 = float(wdic['time'][i+k]-wdic['time'][i])/3600
 
                 dmhs2=wdic['hs'][i]-wdic['hs'][i+k]
@@ -251,10 +259,15 @@ def landcoast_exclude(wdic,gpath=None,mdepth=None,mdfc=None,mdist=None):
     fhs = np.array(wdic['hs'][:])
     for i in range(0,len(wdic['time'])):
         if np.isnan(wdic['hs'][i])==False:
-            indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
-            indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
+            if len(wdic['latitude'])>1:
+                indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
+                indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
+                dist = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
+            else:
+                indlat=np.min(np.where( np.abs(wdic['latitude'][0]-glat)==np.nanmin(np.abs(wdic['latitude'][0]-glat))))
+                indlon=np.min(np.where( np.abs(wdic['longitude'][0]-glon)==np.nanmin(np.abs(wdic['longitude'][0]-glon))))
+                dist = float(haversine((wdic['latitude'][0], wdic['longitude'][0]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
 
-            dist = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
             if dist<mdist:
                 if depth[indlat,indlon]<mdepth or dfc[indlat,indlon]<mdfc:
                     print(" QC landcoast_exclude - Cleaned data: index "+repr(i)+" Hs "+repr(wdic['hs'][i])+", wdepth "+repr(depth[indlat,indlon])+"  dist_to_coast "+repr(dfc[indlat,indlon])) 
@@ -288,9 +301,15 @@ def model_compare(wdic,gpath=None,mdist=None):
         if np.isnan(wdic['hs'][i])==False:
             indt = np.where( abs(gtime[:]-wdic['time'][i]) < 3600. )
             if np.size(indt)>0:
-                indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
-                indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
-                dist = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
+                if len(wdic['latitude'])>1:
+                    indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
+                    indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
+                    dist = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
+                else:
+                    indlat=np.min(np.where( np.abs(wdic['latitude'][0]-glat)==np.nanmin(np.abs(wdic['latitude'][0]-glat))))
+                    indlon=np.min(np.where( np.abs(wdic['longitude'][0]-glon)==np.nanmin(np.abs(wdic['longitude'][0]-glon))))
+                    dist = float(haversine((wdic['latitude'][0], wdic['longitude'][0]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))               
+
                 if dist<mdist:
                     fghs=float(ghs[np.nanmin(indt),indlat,indlon])
                     if wdic['hs'][i]>fghs*1.3+1. or wdic['hs'][i]<fghs*0.75-0.8:
