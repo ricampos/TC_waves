@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import numpy as np
+# from matplotlib.mlab import *
+import pandas as pd
+# from pylab import *
+import os
+import netCDF4 as nc
+import pyresample
+import time
+from calendar import timegm
+import sys
+import warnings; warnings.filterwarnings("ignore")
+# netcdf format
+fnetcdf="NETCDF4"
+
+if __name__ == "__main__":
+
+    # number of procs for parallelization
+    npcs=20
+    # power of initial array 10**pia (size) that will be used to allocate satellite data (faster than append)
+    pia=10
+    # Maximum distance (m) for pyresample weighted average, See: https://doi.org/10.3390/rs15082203
+    dlim=35000.
+    # Maximum temporal distance (s) for pyresample weighted average
+    maxti=1800.
+    # Directory where AODN altimeter data is saved, downloaded using wfetchsatellite_AODN_Altimeter.sh
+    dirs='/work/noaa/marine/ricardo.campos/data/AODN/altimeter'
+    # Date interval
+    datemin='2022010100'; datemax='2025010100'
+
+    # Satellite missions available at AODN dataset, pick one as this code runs one satellite at a time!
+    s=int(sys.argv[1]) # argument satellite ID for satellite mission selection. s=0 is JASON3, s=1 is JASON2 etc. See list below.
+    sdname=np.array(['JASON3','JASON2','CRYOSAT2','JASON1','HY2','HY2B','SARAL','SENTINEL3A','ENVISAT','ERS1','ERS2','GEOSAT','GFO','TOPEX','SENTINEL3B','CFOSAT','SENTINEL6A'])
+    sname=np.array(['JASON-3','JASON-2','CRYOSAT-2','JASON-1','HY-2','HY-2B','SARAL','SENTINEL-3A','ENVISAT','ERS-1','ERS-2','GEOSAT','GFO','TOPEX','SENTINEL-3B','CFOSAT','SENTINEL-6A'])
+    # Ongoing sat missions:
+    # CFOSAT, SARAL, CRYOSAT2, HY2B, JASON3, SENTINEL3A, SENTINEL3B, SENTINEL6A
+    # 0, 2, 5, 6, 7, 14, 15, 16
+
+    # Quality Control parameters
+    max_swh_rms = 1.5  # Max RMS of the band significant wave height
+    max_sig0_rms = 0.8 # Max RMS of the backscatter coefficient
+    max_swh_qc = 2.0 # Max SWH Ku band quality control
+    hsmax=20.; wspmax=90.
+    min_swh_numval = np.array([17,17,17,17,17,17,17,17,17,17,17,-9999,3,7,17,-9999,17])
+
+    # weight function for pyresample
+    def wf(pdist):
+        a=(1 - pdist / (dlim+1))
+        return (abs(a)+a)/2
+
+    # Read buoys Reference
+    df = pd.read_csv('Data_REF.txt', sep='\t')
+    blat = np.array(df['lat'][:]); blon = np.array(df['lon'][:])
+    ftime = np.array( (pd.to_datetime(df['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    btime = np.array( (pd.to_datetime(df['buoy_time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    # ---------------
+
+    # Read Sat Data
+    auxlat=np.array(np.arange(5.,51.,1)).astype('int')
+    auxlon=np.array(np.arange(198.,321.,1)).astype('int')
+
+    # Read and allocate satellite data into arrays
+    ast=np.double(np.zeros((10**pia),'d')); aslat=np.zeros((10**pia),'f'); aslon=np.zeros((10**pia),'f');
+    ahskcal=np.zeros((10**pia),'f')
+    awndcal=np.zeros((10**pia),'f'); asig0knstd=np.zeros((10**pia),'f');
+    aswhknobs=np.zeros((10**pia),'f'); aswhknstd=np.zeros((10**pia),'f'); aswhkqc=np.zeros((10**pia),'f')
+    ii=0
+    for j in auxlat:
+        for k in auxlon:
+
+            if j>=0:
+                hem='N'
+            else:
+                hem='S'
+
+            try: 
+                fu=nc.Dataset(dirs+'/'+sdname[s]+'/IMOS_SRS-Surface-Waves_MW_'+sname[s]+'_FV02_'+str(np.abs(j)).zfill(3)+hem+'-'+str(k).zfill(3)+'E-DM00.nc')
+            except:
+                print(dirs+'/'+sdname[s]+'/IMOS_SRS-Surface-Waves_MW_'+sname[s]+'_FV02_'+str(np.abs(j)).zfill(3)+hem+'-'+str(k).zfill(3)+'E-DM00.nc does not exist'); vai=0
+            else:
+                st=np.double(fu.variables['TIME'][:])
+                if np.size(st)>10:
+                    slat=fu.variables['LATITUDE'][:]
+                    slon=fu.variables['LONGITUDE'][:]
+                    wndcal=fu.variables['WSPD_CAL'][:]
+                    try: 
+                        hskcal=fu.variables['SWH_KU_CAL'][:]
+                        sig0knstd=fu.variables['SIG0_KU_std_dev'][:]
+                        swhknobs=fu.variables['SWH_KU_num_obs'][:]
+                        swhknstd=fu.variables['SWH_KU_std_dev'][:]
+                        swhkqc=fu.variables['SWH_KU_quality_control'][:]
+                    except:
+                        print(' error reading KU, pick KA')
+                        hskcal=fu.variables['SWH_KA_CAL'][:]
+                        sig0knstd=fu.variables['SIG0_KA_std_dev'][:]
+                        swhknobs=fu.variables['SWH_KA_num_obs'][:]
+                        swhknstd=fu.variables['SWH_KA_std_dev'][:]
+                        swhkqc=fu.variables['SWH_KA_quality_control'][:]
+
+                    if ii+np.size(st) <= ast.shape[0] :
+                        if (st.shape[0]==wndcal.shape[0]) & (slat.shape[0]==slon.shape[0]) & (wndcal.shape[0]==hskcal.shape[0]) :    
+                            ast[ii:ii+st.shape[0]]=np.array(st).astype('double')
+                            aslat[ii:ii+st.shape[0]]=np.array(slat).astype('float')
+                            aslon[ii:ii+st.shape[0]]=np.array(slon).astype('float')
+                            ahskcal[ii:ii+st.shape[0]]=np.array(hskcal).astype('float')
+                            awndcal[ii:ii+st.shape[0]]=np.array(wndcal).astype('float')
+                            asig0knstd[ii:ii+st.shape[0]]=np.array(sig0knstd).astype('float')
+                            aswhknobs[ii:ii+st.shape[0]]=np.array(swhknobs).astype('float')
+                            aswhknstd[ii:ii+st.shape[0]]=np.array(swhknstd).astype('float')
+                            aswhkqc[ii:ii+st.shape[0]]=np.array(swhkqc).astype('float')
+                            ii=ii+st.shape[0]
+
+                    else:
+                        sys.exit('Small array to allocate the satellite data! Increase the power of initial array (pia)')
+
+                    del st,slat,slon,hskcal,wndcal,sig0knstd,swhknobs,swhknstd,swhkqc
+                    fu.close(); del fu
+
+    print(' Done reading and allocating satellite data '+sdname[s])
+    del ii
+
+    adatemin= np.double(  (timegm( time.strptime(datemin, '%Y%m%d%H') )-float(timegm( time.strptime('1985010100', '%Y%m%d%H') ))) /(24.*3600.) )
+    adatemax= np.double(  (timegm( time.strptime(datemax, '%Y%m%d%H') )-float(timegm( time.strptime('1985010100', '%Y%m%d%H') ))) /(24.*3600.) )
+
+    # Quality Control Check ----
+    indq = np.where( (aswhknstd<=max_swh_rms) & (asig0knstd<=max_sig0_rms) & (aswhknobs>=min_swh_numval[s]) & (aswhkqc<=max_swh_qc) & (ahskcal>0.3) & (ahskcal<hsmax) & (awndcal>0.3) & (awndcal<wspmax) & (ast>=adatemin) & (ast<=adatemax) )
+    del asig0knstd,aswhknobs,aswhknstd,aswhkqc,adatemin,adatemax
+
+    ast=np.double(np.copy(ast[indq[0]]))
+    ast=np.double(np.copy(ast)*24.*3600.+float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))
+    aslat=np.copy(aslat[indq[0]]); aslon=np.copy(aslon[indq[0]])
+    ahskcal=np.copy(ahskcal[indq[0]])
+    awndcal=np.copy(awndcal[indq[0]])
+
+    # Collocation -------------------
+    fhskcal=np.zeros((btime.shape[0]),'f')*np.nan
+    fwndcal=np.zeros((btime.shape[0]),'f')*np.nan
+    fhskcaln=np.zeros((btime.shape[0]),'f')*np.nan
+    fwndcaln=np.zeros((btime.shape[0]),'f')*np.nan
+    for t in range(0,btime.shape[0]):
+        indt = np.where( abs(ast[:]-btime[t]) < maxti )
+        if np.size(indt)>0:
+
+            prlon=np.copy(aslon[indt[0]]); prlon[prlon>180.]=prlon[prlon>180.]-360.
+
+            indvfast = np.where( np.sqrt((blat[t]-aslat[indt[0]])**2 + (blon[t]-prlon)**2) < dlim/100000.)
+            if np.size(indvfast)>0:
+                print("    OK "+repr(t))
+
+                # Orig space
+                orig_def = pyresample.geometry.SwathDefinition(lons=prlon[indvfast], lats=aslat[indt[0]][indvfast]); del prlon
+
+                # Target
+                targ_def = pyresample.geometry.SwathDefinition(lons=np.array([blon[t]]),lats=np.array([blat[t]]))
+
+                # By distance function wf
+                auxfhskcal = pyresample.kd_tree.resample_custom(orig_def,ahskcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=npcs)
+                auxfwndcal = pyresample.kd_tree.resample_custom(orig_def,awndcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=npcs)
+                # nearest
+                auxfhskcaln = pyresample.kd_tree.resample_nearest(orig_def,ahskcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=npcs)
+                auxfwndcaln = pyresample.kd_tree.resample_nearest(orig_def,awndcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=npcs)
+
+                indpqq = np.where( (auxfhskcal>0.3) & (auxfhskcal<hsmax) & (auxfhskcaln>0.3) & (auxfhskcaln<hsmax) )[0]
+                if np.size(indpqq)>0:   
+                    # allocate data into final array
+                    fhskcal[t] = auxfhskcal[indpqq]
+                    fwndcal[t] = auxfwndcal[indpqq]
+                    fhskcaln[t] = auxfhskcaln[indpqq]
+                    fwndcaln[t] = auxfwndcaln[indpqq]
+
+                del auxfhskcal, auxfwndcal, auxfhskcaln, auxfwndcaln, indpqq
+                
+        del indt
+        print('PyResample kdtree, hourly time, '+repr(t)+' of '+repr(btime.shape[0]))
+
+    del ast, aslat, aslon, ahskcal, awndcal, indq
+
+    print(' '); print(sdname[s]+' Done')
+
+    fhskcal[np.isnan(fhskcal)==True]=-999.999
+    fwndcal[np.isnan(fwndcal)==True]=-999.999
+    fhskcaln[np.isnan(fhskcaln)==True]=-999.999
+    fwndcaln[np.isnan(fwndcaln)==True]=-999.999
+
+    # Save final data
+    df = pd.DataFrame({
+        'time': pd.to_datetime(ftime, unit='s').strftime('%Y%m%d%H%M'),
+        'buoy_time': pd.to_datetime(btime, unit='s').strftime('%Y%m%d%H%M'),
+        'lat': np.round(blat,5),
+        'lon': np.round(blon,5),
+        'hs_avr': np.round(fhskcal,4),
+        'wnd_avr': np.round(fwndcal,4),
+        'hs_nrst': np.round(fhskcaln,4),
+        'wnd_nrst': np.round(fwndcaln,4)
+    })
+
+    df.to_csv("Data_REF_"+sdname[s]+".txt", sep='\t', index=False, header=True)
+

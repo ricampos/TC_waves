@@ -544,7 +544,16 @@ def tseriesnc_cdip(*args):
         btz = np.array(ds['waveTz'].values[:]).astype('float')
         bdp = np.array(ds['waveDp'].values[:]).astype('float')
 
-        blat=np.array(ds['gpsLatitude'].values[:]); blon=np.array(ds['gpsLongitude'].values[:])
+        auxblat=np.array(ds['gpsLatitude'].values[:]); auxblon=np.array(ds['gpsLongitude'].values[:])
+        if len(auxblat) != len(btime):
+            x_new = np.linspace(0, 1, len(btime))
+            x_old_blat = np.linspace(0, 1, len(auxblat))
+            blat = np.interp(x_new, x_old_blat, auxblat)
+            x_old_blon = np.linspace(0, 1, len(auxblon))
+            blon = np.interp(x_new, x_old_blon, auxblon)
+        else:
+            blat = auxblat
+            blon = auxblon
 
         # quality control flag arrays
         wfp = f.variables['waveFlagPrimary'][:]; wfs = f.variables['waveFlagSecondary'][:]
