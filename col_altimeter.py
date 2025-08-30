@@ -9,16 +9,22 @@ import os
 import netCDF4 as nc
 import pyresample
 import time
+import timeit
 from calendar import timegm
 import sys
 import warnings; warnings.filterwarnings("ignore")
 # netcdf format
 fnetcdf="NETCDF4"
 
+
+# weight function for pyresample
+def wf(pdist):
+    a=(1 - pdist / (dlim+1))
+    return (abs(a)+a)/2
+
+
 if __name__ == "__main__":
 
-    # number of procs for parallelization
-    npcs=20
     # power of initial array 10**pia (size) that will be used to allocate satellite data (faster than append)
     pia=10
     # Maximum distance (m) for pyresample weighted average, See: https://doi.org/10.3390/rs15082203
@@ -27,8 +33,20 @@ if __name__ == "__main__":
     maxti=1800.
     # Directory where AODN altimeter data is saved, downloaded using wfetchsatellite_AODN_Altimeter.sh
     dirs='/work/noaa/marine/ricardo.campos/data/AODN/altimeter'
-    # Date interval
-    datemin='2022010100'; datemax='2025010100'
+
+    start = timeit.default_timer()
+
+    # Read buoys Reference
+    df = pd.read_csv('Data_REF.txt', sep='\t')
+    blat = np.array(df['lat'][:]); blon = np.array(df['lon'][:])
+    ftime = np.array( (pd.to_datetime(df['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    btime = np.array( (pd.to_datetime(df['buoy_time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    # ---------------
+
+    # Date interval for satellite data allocation
+    adatemin=btime.min()-3600.; adatemax=btime.max()+3600.
+    adatemin=(adatemin-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
+    adatemax=(adatemax-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
 
     # Satellite missions available at AODN dataset, pick one as this code runs one satellite at a time!
     s=int(sys.argv[1]) # argument satellite ID for satellite mission selection. s=0 is JASON3, s=1 is JASON2 etc. See list below.
@@ -45,21 +63,12 @@ if __name__ == "__main__":
     hsmax=20.; wspmax=90.
     min_swh_numval = np.array([17,17,17,17,17,17,17,17,17,17,17,-9999,3,7,17,-9999,17])
 
-    # weight function for pyresample
-    def wf(pdist):
-        a=(1 - pdist / (dlim+1))
-        return (abs(a)+a)/2
 
-    # Read buoys Reference
-    df = pd.read_csv('Data_REF.txt', sep='\t')
-    blat = np.array(df['lat'][:]); blon = np.array(df['lon'][:])
-    ftime = np.array( (pd.to_datetime(df['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
-    btime = np.array( (pd.to_datetime(df['buoy_time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
-    # ---------------
-
-    # Read Sat Data
-    auxlat=np.array(np.arange(5.,51.,1)).astype('int')
-    auxlon=np.array(np.arange(198.,321.,1)).astype('int')
+    # Read Sat Data -----------------
+    #  domain of interest
+    auxlat=np.array(np.arange(np.floor(blat.min())-1.,np.ceil(blat.max())+1.,1)).astype('int')
+    ablon=np.copy(blon); ablon[ablon<0.]=ablon[ablon<0.]+360.
+    auxlon=np.array(np.arange(np.floor(ablon.min())-1.,np.ceil(ablon.max())+1.,1)).astype('int')
 
     # Read and allocate satellite data into arrays
     ast=np.double(np.zeros((10**pia),'d')); aslat=np.zeros((10**pia),'f'); aslon=np.zeros((10**pia),'f');
@@ -121,80 +130,72 @@ if __name__ == "__main__":
     print(' Done reading and allocating satellite data '+sdname[s])
     del ii
 
-    adatemin= np.double(  (timegm( time.strptime(datemin, '%Y%m%d%H') )-float(timegm( time.strptime('1985010100', '%Y%m%d%H') ))) /(24.*3600.) )
-    adatemax= np.double(  (timegm( time.strptime(datemax, '%Y%m%d%H') )-float(timegm( time.strptime('1985010100', '%Y%m%d%H') ))) /(24.*3600.) )
-
     # Quality Control Check ----
     indq = np.where( (aswhknstd<=max_swh_rms) & (asig0knstd<=max_sig0_rms) & (aswhknobs>=min_swh_numval[s]) & (aswhkqc<=max_swh_qc) & (ahskcal>0.3) & (ahskcal<hsmax) & (awndcal>0.3) & (awndcal<wspmax) & (ast>=adatemin) & (ast<=adatemax) )
     del asig0knstd,aswhknobs,aswhknstd,aswhkqc,adatemin,adatemax
+    print(' '); print(" Collocation ")
+    if np.size(indq)>10:
+        ast=np.double(np.copy(ast[indq[0]]))
+        ast=np.double(np.copy(ast)*24.*3600.+float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))
+        aslat=np.copy(aslat[indq[0]]); aslon=np.copy(aslon[indq[0]])
+        ahskcal=np.copy(ahskcal[indq[0]])
+        awndcal=np.copy(awndcal[indq[0]])
+        del indq
 
-    ast=np.double(np.copy(ast[indq[0]]))
-    ast=np.double(np.copy(ast)*24.*3600.+float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))
-    aslat=np.copy(aslat[indq[0]]); aslon=np.copy(aslon[indq[0]])
-    ahskcal=np.copy(ahskcal[indq[0]])
-    awndcal=np.copy(awndcal[indq[0]])
+        # Collocation -------------------
+        fhskcal=np.zeros((btime.shape[0]),'f')*np.nan; fwndcal=np.zeros((btime.shape[0]),'f')*np.nan
+        fhskcaln=np.zeros((btime.shape[0]),'f')*np.nan; fwndcaln=np.zeros((btime.shape[0]),'f')*np.nan
 
-    # Collocation -------------------
-    fhskcal=np.zeros((btime.shape[0]),'f')*np.nan
-    fwndcal=np.zeros((btime.shape[0]),'f')*np.nan
-    fhskcaln=np.zeros((btime.shape[0]),'f')*np.nan
-    fwndcaln=np.zeros((btime.shape[0]),'f')*np.nan
-    for t in range(0,btime.shape[0]):
-        indt = np.where( abs(ast[:]-btime[t]) < maxti )
-        if np.size(indt)>0:
+        prlon=np.copy(aslon); prlon[prlon>180.]=prlon[prlon>180.]-360.
 
-            prlon=np.copy(aslon[indt[0]]); prlon[prlon>180.]=prlon[prlon>180.]-360.
+        ubtime=np.unique(btime)
+        for t in range(0,ubtime.shape[0]):
 
-            indvfast = np.where( np.sqrt((blat[t]-aslat[indt[0]])**2 + (blon[t]-prlon)**2) < dlim/100000.)
-            if np.size(indvfast)>0:
-                print("    OK "+repr(t))
+            indt1 = np.where( abs(ast[:]-ubtime[t]) < maxti )
+            indt2 = np.where( btime[:]==ubtime[t] )[0]
+
+            if np.size(indt1)>0:
+                indt1=indt1[0]
 
                 # Orig space
-                orig_def = pyresample.geometry.SwathDefinition(lons=prlon[indvfast], lats=aslat[indt[0]][indvfast]); del prlon
-
+                orig_def = pyresample.geometry.SwathDefinition(lons=prlon[indt1], lats=aslat[indt1])
                 # Target
-                targ_def = pyresample.geometry.SwathDefinition(lons=np.array([blon[t]]),lats=np.array([blat[t]]))
+                targ_def = pyresample.geometry.SwathDefinition(lons=blon[indt2],lats=blat[indt2])
 
                 # By distance function wf
-                auxfhskcal = pyresample.kd_tree.resample_custom(orig_def,ahskcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=npcs)
-                auxfwndcal = pyresample.kd_tree.resample_custom(orig_def,awndcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=npcs)
+                fhskcal[indt2] = pyresample.kd_tree.resample_custom(orig_def,ahskcal[indt1],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=0)
+                fwndcal[indt2] = pyresample.kd_tree.resample_custom(orig_def,awndcal[indt1],targ_def,radius_of_influence=dlim,weight_funcs=wf,fill_value=0,nprocs=0)
                 # nearest
-                auxfhskcaln = pyresample.kd_tree.resample_nearest(orig_def,ahskcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=npcs)
-                auxfwndcaln = pyresample.kd_tree.resample_nearest(orig_def,awndcal[indt[0]][indvfast],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=npcs)
+                fhskcaln[indt2] = pyresample.kd_tree.resample_nearest(orig_def,ahskcal[indt1],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=0)
+                fwndcaln[indt2] = pyresample.kd_tree.resample_nearest(orig_def,awndcal[indt1],targ_def,radius_of_influence=dlim,fill_value=0,nprocs=0)
 
-                indpqq = np.where( (auxfhskcal>0.3) & (auxfhskcal<hsmax) & (auxfhskcaln>0.3) & (auxfhskcaln<hsmax) )[0]
-                if np.size(indpqq)>0:   
-                    # allocate data into final array
-                    fhskcal[t] = auxfhskcal[indpqq]
-                    fwndcal[t] = auxfwndcal[indpqq]
-                    fhskcaln[t] = auxfhskcaln[indpqq]
-                    fwndcaln[t] = auxfwndcaln[indpqq]
+                del indt1, indt2, orig_def, targ_def
 
-                del auxfhskcal, auxfwndcal, auxfhskcaln, auxfwndcaln, indpqq
-                
-        del indt
-        print('PyResample kdtree, hourly time, '+repr(t)+' of '+repr(btime.shape[0]))
+        print(sdname[s]+' Collocation Done')
 
-    del ast, aslat, aslon, ahskcal, awndcal, indq
+        fhskcal[(fhskcal < 0.3) | (fhskcal > hsmax)] = -999.999
+        fhskcal[np.isnan(fhskcal)==True]=-999.999
+        fwndcal[(fwndcal < 1.) | (fwndcal > wspmax)] = -999.999
+        fwndcal[np.isnan(fwndcal)==True]=-999.999
+        fhskcaln[(fhskcaln < 0.3) | (fhskcaln > hsmax)] = -999.999
+        fhskcaln[np.isnan(fhskcaln)==True]=-999.999
+        fwndcaln[(fwndcaln < 1.) | (fwndcaln > wspmax)] = -999.999
+        fwndcaln[np.isnan(fwndcaln)==True]=-999.999
 
-    print(' '); print(sdname[s]+' Done')
+        # Save final data
+        df = pd.DataFrame({
+            'time': pd.to_datetime(ftime, unit='s').strftime('%Y%m%d%H%M'),
+            'buoy_time': pd.to_datetime(btime, unit='s').strftime('%Y%m%d%H%M'),
+            'lat': np.round(blat,5),
+            'lon': np.round(blon,5),
+            'hs_avr': np.round(fhskcal,4),
+            'wnd_avr': np.round(fwndcal,4),
+            'hs_nrst': np.round(fhskcaln,4),
+            'wnd_nrst': np.round(fwndcaln,4)
+        })
 
-    fhskcal[np.isnan(fhskcal)==True]=-999.999
-    fwndcal[np.isnan(fwndcal)==True]=-999.999
-    fhskcaln[np.isnan(fhskcaln)==True]=-999.999
-    fwndcaln[np.isnan(fwndcaln)==True]=-999.999
+        df.to_csv("Data_REF_"+sdname[s]+".txt", sep='\t', index=False, header=True)
 
-    # Save final data
-    df = pd.DataFrame({
-        'time': pd.to_datetime(ftime, unit='s').strftime('%Y%m%d%H%M'),
-        'buoy_time': pd.to_datetime(btime, unit='s').strftime('%Y%m%d%H%M'),
-        'lat': np.round(blat,5),
-        'lon': np.round(blon,5),
-        'hs_avr': np.round(fhskcal,4),
-        'wnd_avr': np.round(fwndcal,4),
-        'hs_nrst': np.round(fhskcaln,4),
-        'wnd_nrst': np.round(fwndcaln,4)
-    })
-
-    df.to_csv("Data_REF_"+sdname[s]+".txt", sep='\t', index=False, header=True)
+    stop = timeit.default_timer()
+    print('Concluded in '+repr(int(round(stop - start,0)))+' seconds')
 
