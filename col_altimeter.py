@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-# from matplotlib.mlab import *
+from matplotlib.mlab import *
 import pandas as pd
-# from pylab import *
+from pylab import *
 import os
 import netCDF4 as nc
 import pyresample
@@ -25,6 +25,7 @@ def wf(pdist):
 
 if __name__ == "__main__":
 
+    # INPUTS 
     # power of initial array 10**pia (size) that will be used to allocate satellite data (faster than append)
     pia=10
     # Maximum distance (m) for pyresample weighted average, See: https://doi.org/10.3390/rs15082203
@@ -34,22 +35,15 @@ if __name__ == "__main__":
     # Directory where AODN altimeter data is saved, downloaded using wfetchsatellite_AODN_Altimeter.sh
     dirs='/work/noaa/marine/ricardo.campos/data/AODN/altimeter'
 
-    start = timeit.default_timer()
-
-    # Read buoys Reference
-    df = pd.read_csv('Data_REF.txt', sep='\t')
-    blat = np.array(df['lat'][:]); blon = np.array(df['lon'][:])
-    ftime = np.array( (pd.to_datetime(df['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
-    btime = np.array( (pd.to_datetime(df['buoy_time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
-    # ---------------
-
-    # Date interval for satellite data allocation
-    adatemin=btime.min()-3600.; adatemax=btime.max()+3600.
-    adatemin=(adatemin-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
-    adatemax=(adatemax-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
-
     # Satellite missions available at AODN dataset, pick one as this code runs one satellite at a time!
-    s=int(sys.argv[1]) # argument satellite ID for satellite mission selection. s=0 is JASON3, s=1 is JASON2 etc. See list below.
+    if len(sys.argv) <= 2 :
+        s=int(sys.argv[1]) # argument satellite ID for satellite mission selection. 
+        # s=0 is JASON3, s=1 is JASON2 etc. See list below in sdname
+    else:
+        s=int(sys.argv[1])
+        nseg=int(sys.argv[2])
+        seg=int(sys.argv[3])
+
     sdname=np.array(['JASON3','JASON2','CRYOSAT2','JASON1','HY2','HY2B','SARAL','SENTINEL3A','ENVISAT','ERS1','ERS2','GEOSAT','GFO','TOPEX','SENTINEL3B','CFOSAT','SENTINEL6A'])
     sname=np.array(['JASON-3','JASON-2','CRYOSAT-2','JASON-1','HY-2','HY-2B','SARAL','SENTINEL-3A','ENVISAT','ERS-1','ERS-2','GEOSAT','GFO','TOPEX','SENTINEL-3B','CFOSAT','SENTINEL-6A'])
     # Ongoing sat missions:
@@ -62,6 +56,29 @@ if __name__ == "__main__":
     max_swh_qc = 2.0 # Max SWH Ku band quality control
     hsmax=20.; wspmax=90.
     min_swh_numval = np.array([17,17,17,17,17,17,17,17,17,17,17,-9999,3,7,17,-9999,17])
+    # ---------
+
+    start = timeit.default_timer()
+
+    print(" Processing segment "+str(seg)+" of total "+str(nseg)+". SAT "+sdname[s])
+
+    # Read buoys Reference
+    df = pd.read_csv('Data_REF.txt', sep='\t')
+    lines_to_read = len(df) // nseg
+    if seg<nseg:
+        df = df.iloc[(seg-1)*lines_to_read:(seg)*lines_to_read, :]
+    else:
+        df = df.iloc[(seg-1)*lines_to_read::, :]
+
+    blat = np.array(df['lat'][:]); blon = np.array(df['lon'][:])
+    ftime = np.array( (pd.to_datetime(df['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    btime = np.array( (pd.to_datetime(df['buoy_time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
+    # ---------------
+
+    # Date interval for satellite data allocation
+    adatemin=btime.min()-3600.; adatemax=btime.max()+3600.
+    adatemin=(adatemin-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
+    adatemax=(adatemax-float(timegm( time.strptime('1985010100', '%Y%m%d%H') )))/24./3600.
 
 
     # Read Sat Data -----------------
@@ -194,7 +211,11 @@ if __name__ == "__main__":
             'wnd_nrst': np.round(fwndcaln,4)
         })
 
-        df.to_csv("Data_REF_"+sdname[s]+".txt", sep='\t', index=False, header=True)
+        fname="Data_REF_"+sdname[s]+"_"+str(seg).zfill(2)+"_"+str(nseg).zfill(2)+".txt"
+        if seg==1:
+            df.to_csv(fname, sep='\t', index=False, header=True)
+        else:
+            df.to_csv(fname, sep='\t', index=False, header=False)
 
     stop = timeit.default_timer()
     print('Concluded in '+repr(int(round(stop - start,0)))+' seconds')
