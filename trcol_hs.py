@@ -86,6 +86,7 @@ def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
     '''
     Quantile-Quantile plot.
     '''
+    plt.close('all')
 
     qobs = np.sort(T)
     qm = np.sort(X)
@@ -103,8 +104,8 @@ def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
 
-    plt.ylim(ymax = auxmax, ymin = 0.)
-    plt.xlim(xmax = auxmax, xmin = 0.)
+    plt.ylim(ymax = auxmax, ymin = 0.7)
+    plt.xlim(xmax = auxmax, xmin = 0.7)
     plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
 
     ax.set_xlabel(xlname); ax.set_ylabel(varname)
@@ -117,6 +118,7 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
     '''
     Scatter plot.
     '''
+    plt.close('all')
 
     qobs = np.array(T)
     qm = np.array(X)
@@ -125,8 +127,9 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
     aux=np.linspace(a-0.2*a,b+0.2*a,100)
     # plot
     fig1 = plt.figure(1,figsize=(5,4.5)); ax = fig1.add_subplot(111)
-    ax.plot(aux,aux,'k', linewidth=2.,alpha=0.4,zorder=2); del a,b
-    ax.scatter(qobs,qm, color=qcolor, marker='.', linewidth=1.,alpha=0.8,zorder=3)
+    ax.plot(aux,aux,'k', linewidth=1.,alpha=0.9,zorder=1); del a,b
+    ax.plot(aux,aux,'k', linewidth=0.5,alpha=0.4,zorder=3)
+    ax.scatter(qobs,qm, color=qcolor, marker='.', linewidth=1.,alpha=0.8,zorder=2)
 
     plt.grid(c='grey', ls=':', alpha=0.5,zorder=1)
     for i in np.array([50,80,90,95,99]):
@@ -134,15 +137,37 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
 
-    plt.ylim(ymax = auxmax, ymin = 0.)
-    plt.xlim(xmax = auxmax, xmin = 0.)
+    plt.ylim(ymax = auxmax, ymin = 0.7)
+    plt.xlim(xmax = auxmax, xmin = 0.7)
     plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
 
     ax.set_xlabel(xlname); ax.set_ylabel(varname)
     plt.tight_layout()
-    plt.savefig(fname, dpi=200, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+    plt.savefig(fname+".png", dpi=200, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig1); del fig1, ax
 
+    # Density plot
+    fig2 = plt.figure(1,figsize=(5,4.5)); ax = fig2.add_subplot(111)
+    ax.plot(aux,aux,'k', linewidth=1.,alpha=0.9,zorder=1)
+    ax.plot(aux,aux,'k', linewidth=0.5,alpha=0.4,zorder=3)
+    xy = np.vstack([qobs, qm])
+    z = gaussian_kde(xy)(xy)
+    ax.scatter(qobs, qm, c=z, s=5, cmap=plt.cm.jet, zorder=2)
+
+    plt.grid(c='grey', ls=':', alpha=0.5,zorder=1)
+    for i in np.array([50,80,90,95,99]):
+        plt.axvline(x= np.nanpercentile(X,int(i)),ls='--',color='grey',linewidth=1.,alpha=0.9,zorder=1)
+        plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
+        plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
+
+    plt.ylim(ymax = auxmax, ymin = 0.7)
+    plt.xlim(xmax = auxmax, xmin = 0.7)
+    plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
+
+    ax.set_xlabel(xlname); ax.set_ylabel(varname)
+    plt.tight_layout()
+    plt.savefig(fname+"_denst.png", dpi=200, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+    plt.close(fig2); del fig2, ax
 
 
 if __name__ == "__main__":
@@ -152,8 +177,10 @@ if __name__ == "__main__":
     datemin='2022010100'
     datemax='2025010100'
 
+    MTYPE="NDBC"
+
     # Minimum value for the analysis - to select (or not) more severe events
-    vmin = 1.
+    vmin = 4.
     # Cyclone only
     cycl='yes'
     # -----
@@ -162,45 +189,37 @@ if __name__ == "__main__":
     adatemax= np.double(timegm( time.strptime(datemax, '%Y%m%d%H')))
 
     # ------- Buoy ---------
-    dfx = pd.read_csv('/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/Data_CDIP.txt', sep='\t')
+    dfx = pd.read_csv("/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/Data_"+MTYPE+".txt", sep='\t')
     btime = np.array( (pd.to_datetime(dfx['time'][:], format='%Y%m%d%H%M') - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s') ).astype('double')
     blat = np.array(dfx['lat'][:]); blon = np.array(dfx['lon'][:])
     cmap = dfx['cmap'].values[:]
-    bhs = dfx['hs'].values[:]; btm = dfx['tm'].values[:]
-    btp = dfx['tp'].values[:]; bwnd = dfx['wnd'].values[:]
-    bhs[bhs<0.]=np.nan; btp[btp<0.]=np.nan; btm[btm<0.]=np.nan; bwnd[bwnd<0.]=np.nan
+    bhs = dfx['hs'].values[:]
+    bhs[bhs<0.]=np.nan
     del dfx
     # -----------
 
     # -------- Satellite ---------
     satms = np.array(['CFOSAT','HY2B','SARAL','SENTINEL3B','CRYOSAT2','JASON3','SENTINEL3A','SENTINEL6A']).astype('str')
     for i in range(0,len(satms)):
-        dfy = pd.read_csv("/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/data_proc/CDIP/alt/Data_REF_"+satms[i]+".txt", sep='\t') 
+        dfy = pd.read_csv("/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/data_proc/"+MTYPE+"/alt/Data_REF_"+satms[i]+".txt", sep='\t') 
         if i==0:
             shs = np.zeros((len(dfy)),'f')*np.nan
-            swnd = np.zeros((len(dfy)),'f')*np.nan
 
         aux = np.array(dfy['hs_avr'].values[:]); aux[aux<0]=np.nan
         shs = np.nanmean(([shs],[aux]),axis=0)[0,:]; del aux
-
-        aux = np.array(dfy['wnd_avr'].values[:]); aux[aux<0]=np.nan
-        swnd = np.nanmean(([swnd],[aux]),axis=0)[0,:]; del aux
 
         del dfy
 
     # ----------------                  
 
     # --------- Model -----------
-    dfz = pd.read_csv('/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/data_proc/CDIP/gdas/ColData_GDAS.txt', sep='\t') 
-    mhs = dfz['hs'].values[:]; mwnd = dfz['wnd'].values[:]
-    mhs[mhs<0.]=np.nan; mwnd[mwnd<0.]=np.nan
+    dfz = pd.read_csv("/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/data_proc/"+MTYPE+"/gdas/ColData_GDAS.txt", sep='\t') 
+    mhs = dfz['hs'].values[:]
+    mhs[mhs<0.]=np.nan
     del dfz
     # ---------------------------
 
     # Quality Control Altimeter (exclude outliers that contaminate the statistics)
-    # Max diff for Quality Control
-    diflim = 3.
-
     indqq = np.where( (shs>mhs*1.3+1.) | (shs<mhs*0.75-0.8) )
     if size(indqq)>0.:
         shs[indqq[0]] = np.nan
@@ -209,11 +228,14 @@ if __name__ == "__main__":
     if size(indqq)>0.:
         shs[indqq[0]] = np.nan
 
+    # Max diff for Quality Control
+    diflim = 3.
+
     emean=np.nanmean(([bhs],[shs],[mhs]),axis=0)[0,:]
     if cycl=='no':
-        ind = np.where( (np.abs(bhs-emean)<diflim) & (np.abs(shs-emean)<diflim) & (bhs>vmin) & (shs>vmin) & (shs>vmin) & (mhs>vmin) & (btime>=adatemin) & (btime<=adatemax) )[0]
-    if cycl=='yes'
-        ind = np.where( (cmap>1) & (np.abs(bhs-emean)<diflim) & (np.abs(shs-emean)<diflim) & (bhs>vmin) & (shs>vmin) & (shs>vmin) & (mhs>vmin) & (btime>=adatemin) & (btime<=adatemax) )[0]
+        ind = np.where( (np.abs(bhs-emean)<diflim) & (np.abs(shs-emean)<diflim) & (bhs>vmin) & (shs>vmin) & (mhs>vmin) & (btime>=adatemin) & (btime<=adatemax) )[0]
+    if cycl=='yes':
+        ind = np.where( (cmap>1) & (np.abs(bhs-emean)<diflim) & (np.abs(shs-emean)<diflim) & (bhs>vmin) & (shs>vmin) & (mhs>vmin) & (btime>=adatemin) & (btime<=adatemax) )[0]
 
     nsz = int(size(ind))
     print(" Number of matchups for the triple collocation: "+repr(nsz))
@@ -320,19 +342,18 @@ if __name__ == "__main__":
     np.savetxt(ifile,np.atleast_2d(merr_Z) ,fmt="%12.4f",delimiter='	') 
     ifile.close(); del ifile
 
-    # QQ-plots, Scatter Plots, Taylor
-    txyz, X, Y , Z
+    # QQ-plots, Scatter Plots, Taylor Diagram
 
-    auxmax = 10.
+    auxmax = 12.
     qqplot(X,txyz,"#1f77b4",auxmax,"Reference truth (T)","Buoy","QQplot_X_TrpCol_"+str(int(vmin)).zfill(2)+".png")
     qqplot(Y,txyz,"darkgreen",auxmax,"Reference truth (T)","Altimeter","QQplot_Y_TrpCol_"+str(int(vmin)).zfill(2)+".png")
     qqplot(Z,txyz,"firebrick",auxmax,"Reference truth (T)","Model","QQplot_Z_TrpCol_"+str(int(vmin)).zfill(2)+".png")
     qqplot(Y,X,"k",auxmax,"Buoy","Altimeter","QQplot_XY_TrpCol_"+str(int(vmin)).zfill(2)+".png")
 
-    scatterplot(X,txyz,"#1f77b4",auxmax,"Reference truth (T)","Buoy","Scatterplot_X_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    scatterplot(Y,txyz,"darkgreen",auxmax,"Reference truth (T)","Altimeter","Scatterplot_Y_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    scatterplot(Z,txyz,"firebrick",auxmax,"Reference truth (T)","Model","Scatterplot_Z_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    scatterplot(Y,X,"k",auxmax,"Buoy","Altimeter","Scatterplot_XY_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    scatterplot(X,txyz,"#1f77b4",auxmax,"Reference truth (T)","Buoy","Scatterplot_X_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Y,txyz,"darkgreen",auxmax,"Reference truth (T)","Altimeter","Scatterplot_Y_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Z,txyz,"firebrick",auxmax,"Reference truth (T)","Model","Scatterplot_Z_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Y,X,"dimgrey",auxmax,"Buoy","Altimeter","Scatterplot_XY_TrpCol_"+str(int(vmin)).zfill(2))
 
     mop=ModelObsPlot(model=[X,Z,Y],obs=txyz, mlabels=['Buoy','Model','Altimeter'],ftag="TrpCol_"+str(int(vmin)).zfill(2)+"_")
     mop.taylordiagram()
