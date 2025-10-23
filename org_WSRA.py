@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """
-org_fbuoys.py
+org_WSRA.py
 
 VERSION AND LAST UPDATE:
- v1.0  08/28/2025
+ v1.0  10/09/2025
 
 PURPOSE:
- Data processing, quality control, and organizing of wave (or metocean) buoys (fixed):
-  CDIP, NDBC
+ Data processing, quality control, and organizing of wave obs:
+  WSRA
 
 OUTPUT:
  Text file Data_*.txt. See the last line df.to_csv(
@@ -19,7 +19,7 @@ DEPENDENCIES:
  See the imports below.
 
 AUTHOR and DATE:
- 08/28/2025: Ricardo M. Campos, first version.
+ 10/09/2025: Ricardo M. Campos, first version.
 
 PERSON OF CONTACT:
  Ricardo M Campos: ricardo.campos@noaa.gov
@@ -36,21 +36,17 @@ import time
 from wread import *
 import quality_control_wave
 
+
 if __name__ == "__main__":
 
     # Input settings
     # Data intervall of the final array (original time is also saved)
     wdt = 3600.
     # Buoy data type
-    buoyd="NDBC"
-
-    # List buoy data
-    if buoyd=="NDBC":
-        dpath="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/NDBC/wparam"
-        bnames = np.array(pd.read_csv(dpath+"/list.txt", header=None).values).astype('str')
-    else:
-        dpath="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/CDIP"
-        bnames = np.array(pd.read_csv(dpath+"/CDIP_buoy_selection.txt", header=None).values).astype('str')
+    buoyd="WSRA"
+    # data path
+    dpath="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/WSRA_L4"
+    events = np.array(pd.read_csv(dpath+"/list_events_2024.txt", header=None).values).astype('str')[:,0]
 
     # GridMask
     f=nc.Dataset('gridInfo_TGPM.nc')
@@ -69,46 +65,39 @@ if __name__ == "__main__":
     # cmap[cmap<0]=np.nan; cid[cid<0]=np.nan; csec[csec<0]=np.nan
 
     ftime=[]; frtime=[]; bid=[]
-    lat=[]; lon=[]; gidlat=[]; gidlon=[]; # glat=[]; glon=[]; 
+    lat=[]; lon=[]; gidlat=[]; gidlon=[] 
     hs=[]; tp=[]; tm=[]; wnd=[] 
-    bcmap=[]; bcid=[]; # bcsec=[]
+    bcmap=[]; bcid=[]
 
-    for i in range(0,len(bnames)):
+    for i in range(0,len(events)):
+        dname = dpath+"/"+events[i]
+        fnames = np.array(pd.read_csv(dname+"/list.txt", header=None).values).astype('str')[:,0]
+        for j in range(0,len(fnames)):
+            # Read netcdf file
+            fname=dpath+"/"+events[i]+"/"+fnames[j]
 
-        # Read netcdf file
-        if buoyd=="NDBC":
-            fname=dpath+"/"+bnames[i][0]
-        else:
-            fname=dpath+"/CDIP_buoy_"+bnames[i][0]+"_historic.nc" # CDIP
-
-        try:
-            if buoyd=="NDBC":
-                wdic = tseriesnc_ndbc(fname)
+            try:
+                wdic = tseriesnc_wsra(fname)
+            except:
+                print(" Cannot open "+fname)
             else:
-                wdic = tseriesnc_cdip(fname)
 
-        except:
-            print(" Cannot open "+fname)
-        else:
-
-            if np.any(wdic['hs']>0.1):
-
-                print(" Processing QC for "+bnames[i][0])
+                print(" Processing QC for "+fname)
                 wdic['hs']=quality_control_wave.data_range(wdic,var='hs',vmin=0.3,vmax=20.)
                 wdic['hs']=quality_control_wave.duplicates(wdic)
                 wdic['hs']=quality_control_wave.rate_of_change(wdic)
                 wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/gridInfo_TGPM.nc',mdepth=80,mdfc=5)
-                # wdic['hs']=quality_control_wave.model_compare(wdic,gpath=None,mdist=None)
-                print(" OK - QC for "+bnames[i][0])
+                wdic=quality_control_wave.wsra(wdic)
+                wdic['hs']=quality_control_wave.model_compare(wdic,gpath='/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/GDAS',mdist=None)
+                print(" OK - QC for "+fname+" "+fname)
 
                 ind=np.where(wdic['hs']>0.1)
-
                 if np.size(ind)>0:
 
                     ind=ind[0]
 
                     at=wdic['time'][ind]; adate=wdic['date'][ind]
-                    ahs=wdic['hs'][ind]
+                    ahs=wdic['hs'][ind];
 
                     if "wind_spd" in wdic:
                         awnd=wdic['wind_spd'][ind]
@@ -125,18 +114,18 @@ if __name__ == "__main__":
                     else:
                         atm=np.zeros(len(ahs),'f')-999.999
 
-                    alat=wdic['latitude'][0]; alon=wdic['longitude'][0]
-
-                    indlat = np.where( np.abs(latc-alat) == np.nanmin(np.abs(latc-alat)) )[0][0]
-                    indlon = np.where( np.abs(lonc-alon) == np.nanmin(np.abs(lonc-alon)) )[0][0]
+                    alat=wdic['latitude'][ind]; alon=wdic['longitude'][ind]
 
                     initime = str(pd.to_datetime(adate.min()).year)+str(pd.to_datetime(adate.min()).month).zfill(2)+str(pd.to_datetime(adate.min()).day).zfill(2)+str(pd.to_datetime(adate.min()).hour).zfill(2)
                     fintime = str(pd.to_datetime(adate.max()).year)+str(pd.to_datetime(adate.max()).month).zfill(2)+str(pd.to_datetime(adate.max()).day).zfill(2)+str(pd.to_datetime(adate.max()).hour).zfill(2)
                     aftime = np.array(np.arange(float(timegm( time.strptime(initime, '%Y%m%d%H') )),float(timegm( time.strptime(fintime, '%Y%m%d%H') ))+1,wdt)).astype('double')
 
+                    blat=[]; blon=[]; aindt=np.array([]).astype('int')
                     bhs=[]; bwnd=[]; btp=[]; btm=[]
                     btime=np.double([]); brt=np.double([])
                     abcmap=[]; abcid=[]; # abcsec=[]
+                    agidlat=[]; agidlon=[]; abid=[]
+                    c=0
                     for t in range(0,len(at)):
 
                         # organize time and allocate data
@@ -149,12 +138,21 @@ if __name__ == "__main__":
                             btm = np.append(btm,atm[t])
                             btime = np.append(btime,double(np.min(at[t])))
                             brt = np.append(brt,double(np.min(aftime[indt])))
-
+                            blat = np.append(blat,alat[t])
+                            blon = np.append(blon,alon[t])
                             del indt
+
+                            # Model position index
+                            indlat = np.where( np.abs(latm-alat[t]) == np.nanmin(np.abs(latm-alat[t])) )[0][0]
+                            indlon = np.where( np.abs(lonm-alon[t]) == np.nanmin(np.abs(lonm-alon[t])) )[0][0]
+                            agidlat = np.append(agidlat,int(indlat)); agidlon = np.append(agidlon,int(indlat))
+                            del indlat, indlon
 
                             # check cyclone presence
                             indc=np.where(np.abs(ctime-at[t])<=5400.)
                             if np.size(indc)>0:
+                                indlat = np.where( np.abs(latc-alat[t]) == np.nanmin(np.abs(latc-alat[t])) )[0][0]
+                                indlon = np.where( np.abs(lonc-alon[t]) == np.nanmin(np.abs(lonc-alon[t])) )[0][0]
                                 if cmap[np.min(indc[0]),indlat,indlon]>0:
                                     abcmap = np.append(abcmap,int(cmap[np.min(indc[0]),indlat,indlon]))
                                     abcid = np.append(abcid,int(cid[np.min(indc[0]),indlat,indlon]))
@@ -163,6 +161,9 @@ if __name__ == "__main__":
                                     abcmap = np.append(abcmap,0)
                                     abcid = np.append(abcid,0)
                                     # abcsec = np.append(abcsec,0)
+
+                                del indlat,indlon
+
                             else:
                                 abcmap = np.append(abcmap,0)
                                 abcid = np.append(abcid,0)
@@ -170,41 +171,32 @@ if __name__ == "__main__":
 
                             del indc
 
+                        print(" Ok data allocation "+repr(t)+" "+fname)
 
-                        print(" Ok data allocation "+repr(t)+" "+bnames[i][0])
-
-                    del ind, indlat, indlon
-                    # insert the position in the model grid 
-                    indlat = np.where( np.abs(latm-alat) == np.nanmin(np.abs(latm-alat)) )[0][0]
-                    indlon = np.where( np.abs(lonm-alon) == np.nanmin(np.abs(lonm-alon)) )[0][0]
+                    del ind
 
                     # Final arrays
-                    btime=np.array(btime).astype('double'); brt=np.array(brt).astype('double')
-                    blat=np.zeros((brt.shape[0]),'f')+alat; blon=np.zeros((brt.shape[0]),'f')+alon
-                    # bglat=np.zeros((brt.shape[0]),'f')+latm[indlat]; bglon=np.zeros((brt.shape[0]),'f')+lonm[indlon]
-                    agidlat=np.zeros((brt.shape[0]),'int')+int(indlat); agidlon=np.zeros((brt.shape[0]),'int')+int(indlon)
-                    abid=np.array(np.zeros((brt.shape[0]),'i')).astype('str')
-                    if buoyd=="NDBC":
-                        abid[:]="NDBC"+fname.split('/')[-1].split('h')[0]
-                    else:
-                        abid[:]="CDIP"+fname.split('/')[-1].split('_')[2]
+                    if np.size(abcid)>0:
+                        aux=np.zeros(btime.shape[0],'i').astype('str'); aux[:]="WSRA"+events[i]+fname[-5:-3]
+                        abid = np.append(abid,aux); del aux
 
-                    ftime=np.append(ftime,btime); frtime=np.append(frtime,brt)
-                    lat=np.append(lat,blat); lon=np.append(lon,blon); bid=np.append(bid,abid)
-                    # glat=np.append(glat,bglat); glon=np.append(glon,bglon)
-                    gidlat=np.append(gidlat,agidlat); gidlon=np.append(gidlon,agidlon)
-                    hs=np.append(hs,bhs); tp=np.append(tp,btp); tm=np.append(tm,btm); wnd=np.append(wnd,bwnd)
-                    bcmap = np.append(bcmap,abcmap)
-                    abcid[abcid<0]=0.; abcid[np.isnan(abcid)==True]=0.; bcid = np.append(bcid,abcid)
-                    # bcsec = np.append(bcsec,abcsec)
+                        btime=np.array(btime).astype('double'); brt=np.array(brt).astype('double')
+                        agidlat=np.array(agidlat).astype('int'); agidlon=np.array(agidlon).astype('int')
 
-                    print(bnames[i][0]+" done")
+                        ftime=np.append(ftime,btime); frtime=np.append(frtime,brt)
+                        lat=np.append(lat,blat); lon=np.append(lon,blon); bid=np.append(bid,abid)
+                        # glat=np.append(glat,bglat); glon=np.append(glon,bglon)
+                        gidlat=np.append(gidlat,agidlat); gidlon=np.append(gidlon,agidlon)
+                        hs=np.append(hs,bhs); tp=np.append(tp,btp); tm=np.append(tm,btm); wnd=np.append(wnd,bwnd)
+                        bcmap = np.append(bcmap,abcmap)
+                        abcid[abcid<0]=0.; abcid[np.isnan(abcid)==True]=0.; bcid = np.append(bcid,abcid)
+                        # bcsec = np.append(bcsec,abcsec)
 
-                    del indlat,indlon,bhs,btp,btm,bwnd,btime,brt,aftime,blat,blon,abcmap,abcid #,bglat,bglon
+                    print(fname+" done")
+
+                    del bhs,btp,btm,bwnd,btime,brt,aftime,blat,blon,abcmap,abcid,abid #,bglat,bglon
 
             del wdic
-
-        del fname
 
 
     # Save results
@@ -219,7 +211,7 @@ if __name__ == "__main__":
         gidlat=np.array(gidlat).astype('int'); gidlon=np.array(gidlon).astype('int')
         bcmap=np.array(bcmap).astype('int'); bcid=np.array(bcid).astype('int')
 
-        # Save wdics 
+        # Save wdics
         df = pd.DataFrame({
             'time': pd.to_datetime(frtime, unit='s').strftime('%Y%m%d%H%M'),
             'buoy_time': pd.to_datetime(ftime, unit='s').strftime('%Y%m%d%H%M'),
@@ -239,9 +231,5 @@ if __name__ == "__main__":
             'wnd': wnd
         })
 
-        if buoyd=="NDBC":
-            df.to_csv('Data_NDBC.txt', sep='\t', index=False, header=True)
-        else:
-            df.to_csv('Data_CDIP.txt', sep='\t', index=False, header=True)
-
+        df.to_csv('Data_WSRA.txt', sep='\t', index=False, header=True)
 

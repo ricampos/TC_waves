@@ -82,7 +82,7 @@ def roerr(X,Y,Z,Bx,By,Bz):
     return e_x, e_y, e_z
 
 # visualization
-def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
+def qqplot(X,T,qcolor,auxmax,xymin,xlname,varname,fname):
     '''
     Quantile-Quantile plot.
     '''
@@ -91,7 +91,7 @@ def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
     qobs = np.sort(T)
     qm = np.sort(X)
 
-    a=0. ; b=auxmax
+    a=xymin ; b=auxmax
     aux=np.linspace(a-0.2*a,b+0.2*a,100)
     # plot
     fig1 = plt.figure(1,figsize=(5,4.5)); ax = fig1.add_subplot(111)
@@ -99,14 +99,15 @@ def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
     ax.plot(qobs,qm, color=qcolor, marker='.', linestyle=' ',linewidth=1.,alpha=0.8,zorder=3)
 
     plt.grid(c='grey', ls=':', alpha=0.5,zorder=1)
+    # plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
+    ax.set_xticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    ax.set_yticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    plt.ylim(ymax = auxmax, ymin = xymin)
+    plt.xlim(xmax = auxmax, xmin = xymin)
     for i in np.array([50,80,90,95,99]):
         plt.axvline(x= np.nanpercentile(X,int(i)),ls='--',color='grey',linewidth=1.,alpha=0.9,zorder=1)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
-
-    plt.ylim(ymax = auxmax, ymin = 0.7)
-    plt.xlim(xmax = auxmax, xmin = 0.7)
-    plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
 
     ax.set_xlabel(xlname); ax.set_ylabel(varname)
     plt.tight_layout()
@@ -114,7 +115,7 @@ def qqplot(X,T,qcolor,auxmax,xlname,varname,fname):
     plt.close(fig1); del fig1, ax
 
 
-def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
+def scatterplot(X,T,qcolor,auxmax,xymin,xlname,varname,fname):
     '''
     Scatter plot.
     '''
@@ -123,7 +124,7 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
     qobs = np.array(T)
     qm = np.array(X)
 
-    a=0. ; b=auxmax
+    a=xymin ; b=auxmax
     aux=np.linspace(a-0.2*a,b+0.2*a,100)
     # plot
     fig1 = plt.figure(1,figsize=(5,4.5)); ax = fig1.add_subplot(111)
@@ -132,14 +133,15 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
     ax.scatter(qobs,qm, color=qcolor, marker='.', linewidth=1.,alpha=0.8,zorder=2)
 
     plt.grid(c='grey', ls=':', alpha=0.5,zorder=1)
+    # plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
+    ax.set_xticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    ax.set_yticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    plt.ylim(ymax = auxmax, ymin = xymin)
+    plt.xlim(xmax = auxmax, xmin = xymin)
     for i in np.array([50,80,90,95,99]):
         plt.axvline(x= np.nanpercentile(X,int(i)),ls='--',color='grey',linewidth=1.,alpha=0.9,zorder=1)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
-
-    plt.ylim(ymax = auxmax, ymin = 0.7)
-    plt.xlim(xmax = auxmax, xmin = 0.7)
-    plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
 
     ax.set_xlabel(xlname); ax.set_ylabel(varname)
     plt.tight_layout()
@@ -155,14 +157,15 @@ def scatterplot(X,T,qcolor,auxmax,xlname,varname,fname):
     ax.scatter(qobs, qm, c=z, s=5, cmap=plt.cm.jet, zorder=2)
 
     plt.grid(c='grey', ls=':', alpha=0.5,zorder=1)
+    # plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
+    ax.set_xticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    ax.set_yticks(np.arange(1, np.ceil(auxmax) + 1, 1))
+    plt.ylim(ymax = auxmax, ymin = xymin)
+    plt.xlim(xmax = auxmax, xmin = xymin)
     for i in np.array([50,80,90,95,99]):
         plt.axvline(x= np.nanpercentile(X,int(i)),ls='--',color='grey',linewidth=1.,alpha=0.9,zorder=1)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/15 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7,zorder=4)
         plt.text(np.nanpercentile(X,int(i)),(aux.max()-aux.min())/1.05 + aux.min(),str(int(i))+'th',color='dimgrey',fontsize=sl-7)
-
-    plt.ylim(ymax = auxmax, ymin = 0.7)
-    plt.xlim(xmax = auxmax, xmin = 0.7)
-    plt.locator_params(axis='y', nbins=7) ; plt.locator_params(axis='x', nbins=7) 
 
     ax.set_xlabel(xlname); ax.set_ylabel(varname)
     plt.tight_layout()
@@ -177,12 +180,12 @@ if __name__ == "__main__":
     datemin='2022010100'
     datemax='2025010100'
 
-    MTYPE="NDBC"
+    MTYPE="SPOTTER"
 
     # Minimum value for the analysis - to select (or not) more severe events
-    vmin = 4.
+    vmin = 1.
     # Cyclone only
-    cycl='yes'
+    cycl='no'
     # -----
 
     adatemin= np.double(timegm( time.strptime(datemin, '%Y%m%d%H')))
@@ -228,6 +231,20 @@ if __name__ == "__main__":
     if size(indqq)>0.:
         shs[indqq[0]] = np.nan
 
+
+    # Initial view Model X Buoy
+    indbm = np.where( (bhs*mhs > 0.) )[0]
+    bhs2 = np.copy(bhs[indbm]); mhs2 = np.copy(mhs[indbm]); del indbm
+    auxmax = np.max([mhs2.max(),bhs2.max()])+0.5; xymin=-0.1
+    qqplot(mhs2,bhs2,"k",auxmax,xymin,"Buoy","Model","QQplot_org_BuoyModel_"+str(int(vmin)).zfill(2)+".png")
+    # scatterplot(mhs2,bhs2,"k",auxmax,xymin,"Buoy","Model","Scatterplot_org_BuoyModel_"+str(int(vmin)).zfill(2))
+    # mop=ModelObsPlot(model=[mhs2],obs=bhs2, mlabels=['Model'],ftag="BuoyModel_org_"+str(int(vmin)).zfill(2)+"_")
+    # mop.taylordiagram()
+
+
+
+    # ========== Triple Collocation =======================
+
     # Max diff for Quality Control
     diflim = 3.
 
@@ -240,8 +257,6 @@ if __name__ == "__main__":
     nsz = int(size(ind))
     print(" Number of matchups for the triple collocation: "+repr(nsz))
 
-
-    # ========== Triple Collocation =======================
 
     X = bhs[ind]
     Y = shs[ind]
@@ -344,16 +359,20 @@ if __name__ == "__main__":
 
     # QQ-plots, Scatter Plots, Taylor Diagram
 
-    auxmax = 12.
-    qqplot(X,txyz,"#1f77b4",auxmax,"Reference truth (T)","Buoy","QQplot_X_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    qqplot(Y,txyz,"darkgreen",auxmax,"Reference truth (T)","Altimeter","QQplot_Y_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    qqplot(Z,txyz,"firebrick",auxmax,"Reference truth (T)","Model","QQplot_Z_TrpCol_"+str(int(vmin)).zfill(2)+".png")
-    qqplot(Y,X,"k",auxmax,"Buoy","Altimeter","QQplot_XY_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    auxmax = np.max([X.max(),Y.max(),Z.max()])+0.5; xymin=0.7
+    qqplot(X,txyz,"#1f77b4",auxmax,xymin,"Reference truth (T)","Buoy","QQplot_X_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    qqplot(Y,txyz,"darkgreen",auxmax,xymin,"Reference truth (T)","Altimeter","QQplot_Y_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    qqplot(Z,txyz,"firebrick",auxmax,xymin,"Reference truth (T)","Model","QQplot_Z_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    qqplot(Y,X,"k",auxmax,xymin,"Buoy","Altimeter","QQplot_XY_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    qqplot(Z,X,"k",auxmax,xymin,"Buoy","Model","QQplot_XZ_TrpCol_"+str(int(vmin)).zfill(2)+".png")
+    qqplot(Z,Y,"k",auxmax,xymin,"Altimeter","Model","QQplot_YZ_TrpCol_"+str(int(vmin)).zfill(2)+".png")
 
-    scatterplot(X,txyz,"#1f77b4",auxmax,"Reference truth (T)","Buoy","Scatterplot_X_TrpCol_"+str(int(vmin)).zfill(2))
-    scatterplot(Y,txyz,"darkgreen",auxmax,"Reference truth (T)","Altimeter","Scatterplot_Y_TrpCol_"+str(int(vmin)).zfill(2))
-    scatterplot(Z,txyz,"firebrick",auxmax,"Reference truth (T)","Model","Scatterplot_Z_TrpCol_"+str(int(vmin)).zfill(2))
-    scatterplot(Y,X,"dimgrey",auxmax,"Buoy","Altimeter","Scatterplot_XY_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(X,txyz,"#1f77b4",auxmax,xymin,"Reference truth (T)","Buoy","Scatterplot_X_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Y,txyz,"darkgreen",auxmax,xymin,"Reference truth (T)","Altimeter","Scatterplot_Y_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Z,txyz,"firebrick",auxmax,xymin,"Reference truth (T)","Model","Scatterplot_Z_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Y,X,"dimgrey",auxmax,xymin,"Buoy","Altimeter","Scatterplot_XY_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Z,X,"dimgrey",auxmax,xymin,"Buoy","Model","Scatterplot_XZ_TrpCol_"+str(int(vmin)).zfill(2))
+    scatterplot(Z,Y,"dimgrey",auxmax,xymin,"Altimeter","Model","Scatterplot_YZ_TrpCol_"+str(int(vmin)).zfill(2))
 
     mop=ModelObsPlot(model=[X,Z,Y],obs=txyz, mlabels=['Buoy','Model','Altimeter'],ftag="TrpCol_"+str(int(vmin)).zfill(2)+"_")
     mop.taylordiagram()

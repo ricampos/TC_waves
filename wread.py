@@ -598,10 +598,23 @@ def tseriesnc_microswift(*args):
         btime = (pd.to_datetime(ds['time'].values) - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s')
         blat=np.array(ds['lat'].values[:]); blon=np.array(ds['lon'].values[:])
 
-        bhs = np.array(ds['sea_surface_wave_significant_height'].values[:]).astype('float')
-        bdp = np.array(ds['sea_surface_wave_from_direction_at_variance_spectral_density_maximum'].values[:]).astype('float')
-        btp = np.array(ds['sea_surface_wave_period_at_variance_spectral_density_maximum'].values[:]).astype('float')
+        if 'sea_surface_wave_significant_height' in ds.keys():
+            bhs = np.array(ds['sea_surface_wave_significant_height'].values[:]).astype('float')
+        else:
+            bhs = np.array(ds['significant_wave_height'].values[:]).astype('float')
+
+        if 'sea_surface_wave_from_direction_at_variance_spectral_density_maximum' in ds.keys():
+            bdp = np.array(ds['sea_surface_wave_from_direction_at_variance_spectral_density_maximum'].values[:]).astype('float')
+        else:
+            bdp = np.array(ds['peak_wave_direction'].values[:]).astype('float')
+
+        if 'sea_surface_wave_period_at_variance_spectral_density_maximum' in ds.keys():
+            btp = np.array(ds['sea_surface_wave_period_at_variance_spectral_density_maximum'].values[:]).astype('float')
+        else:
+            btp = np.array(ds['peak_wave_period'].values[:]).astype('float')
+
         bsst = np.array(ds['sea_water_temperature'].values[:]).astype('float')
+
 
         # Automatic and basic Quality Control
         bhs[(bhs<0.1)|(bhs>20)]=np.nan
@@ -686,6 +699,47 @@ def tseries_spotter(*args):
         return result
         sdf.close()
         del sdf,btime,bdate,blat,blon,bhs,btm,btp,bdm,bdp
+
+# Observations Sofar spotter, netcdf format
+def tseriesnc_spotter(fname):
+    '''
+    Observations Sofar spotter, time series/table, netcdf format
+    Input: file name (example: hurricane_francine_SPOT-31983C.nc)
+     and station ID.
+    Output: dictionary containing the arrays: time(seconds since 1970),time(datetime64),lat,lon, 
+      and arrays hs,tm,tp,dm,dp
+    '''
+
+    try:
+        ds = xr.open_dataset(fname); f=nc.Dataset(fname)
+    except:
+        sys.exit(" Cannot open "+fname)
+    else:
+
+        btime = (pd.to_datetime(ds['time'].values) - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s')
+        blat=np.array(ds['latitude'].values[:]); blon=np.array(ds['longitude'].values[:]); blon[blon>180]=blon[blon>180]-360.
+
+        bhs = np.array(ds['significant_height'].values[:]).astype('float')
+        btp = np.array(ds['peak_period'].values[:]).astype('float')
+        btm = np.array(ds['mean_period'].values[:]).astype('float')
+        bdp = np.array(ds['peak_direction'].values[:]).astype('float')
+        bdm = np.array(ds['mean_direction'].values[:]).astype('float')
+
+        # Automatic and basic Quality Control
+        bhs[(bhs<0.1)|(bhs>20)]=np.nan
+        btp[(btp<1)|(btp>30)]=np.nan
+        btm[(btm<1)|(btm>30)]=np.nan
+        bdm[(bdm<-180)|(bdm>360)]=np.nan
+        bdp[(bdp<-180)|(bdp>360)]=np.nan
+
+        result={'latitude':blat,'longitude':blon,
+        'time':btime,'date':ds['time'].values[:],
+        'hs':bhs, 'tp':btp, 'tm':btm, 'dm':bdm, 'dp':bdp,}
+
+        return result
+        ds.close(); f.close()
+        del f,ds,btime,blat,blon,bhs,btp,btm,bdp,bdm
+
 
 # Observations Directional Wave Spectra Drifter (DWSD), netcdf format
 def tseriesnc_dwsd(*args):
@@ -837,7 +891,7 @@ def tseriesnc_saildrone(*args):
         ds.close(); f.close()
         del f,ds,btime,blat,blon,bsst,bslp,brh,btmp,bhs,btp
 
-# Observations Saildrones, netcdf format
+# Observations P-3 WSRA, netcdf format
 def tseriesnc_wsra(*args):
     '''
     Observations WSRA_L4, time series/table, netcdf format
