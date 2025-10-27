@@ -49,6 +49,7 @@ import pylab
 from pylab import *
 from matplotlib.mlab import *
 import geopy.distance
+from scipy.interpolate import griddata
 import netCDF4 as nc
 import pandas as pd
 import numpy as np
@@ -60,8 +61,7 @@ import pandas as pd
 import warnings; warnings.filterwarnings("ignore")
 fnetcdf="NETCDF4_CLASSIC"
 
-
-
+# Auxiliar functions ---
 def bearing(lat1, lon1, lat2, lon2):
     """
     Calculate the propagation direction (going to), based on two pairs of lat/lons
@@ -97,53 +97,34 @@ def cbearing(alat,alon):
     avg_dir_deg = (np.rad2deg(avg_dir_rad) + 360) % 360
     return avg_dir_deg
 
-
-def rotate(self,pwm,rangle,wvar="all"):
+def rotate_field(A, lat, lon, x_dir):
     """
     Rotate the vortex based on the propagation heading (rangle).
     """
-    lon_flat = pwm['lon'].ravel()
-    lat_flat = pwm['lat'].ravel()
-    lon0 = np.mean(pwm['lon'])
-    lat0 = np.mean(pwm['lat'])
-    theta = -rangle * np.pi / 180  # degrees to radians, negative for clockwise
-    # Approximate lon/lat as Cartesian for small area (equirectangular projection)
-    x = (lon_flat - lon0) * np.cos(np.deg2rad(lat0))
-    y = lat_flat - lat0
-    # Apply 2D rotation
-    x_rot = x * np.cos(theta) - y * np.sin(theta)
-    y_rot = x * np.sin(theta) + y * np.cos(theta)
-    # Convert back to lon/lat
-    lon_rot = x_rot / np.cos(np.deg2rad(lat0)) + lon0
-    lat_rot = y_rot + lat0
-    # Construct rotated points array
-    rotated_points = np.column_stack((lon_rot, lat_rot))
+    theta = np.deg2rad(x_dir)
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    # Center of rotation
+    lat0 = np.mean(lat)
+    lon0 = np.mean(lon)
+    # Convert to local coordinates
+    x = (lon2d - lon0) * np.cos(np.deg2rad(lat0))
+    y = lat2d - lat0
+    # Apply rotation
+    x_rot =  x * np.cos(theta) - y * np.sin(theta)
+    y_rot =  x * np.sin(theta) + y * np.cos(theta)
+    # Convert back to lat/lon
+    lon_rot = lon0 + x_rot / np.cos(np.deg2rad(lat0))
+    lat_rot = lat0 + y_rot
 
-    mdist = np.nanmin([np.abs(pwm['yrm'][-1]-np.nanmean(pwm['yrm'])), np.abs(pwm['xrm'][-1]-np.nanmean(pwm['xrm']))])
-    X, Y = np.meshgrid(pwm['yrm'], pwm['xrm'])
-    gdist = np.sqrt(X**2 + Y**2)
-    gdist[gdist>mdist]=np.nan; gdist=gdist/gdist
+    # Interpolate rotated field
+    points = np.column_stack((lon2d.ravel(), lat2d.ravel()))
+    values = A.ravel()
+    points_new = np.column_stack((lon_rot.ravel(), lat_rot.ravel()))
 
-    # Interpolate onto the original lat/lon grid
-    if wvar=="all":
-        for i in range(0,len(self.wvar)):
-            value = griddata(rotated_points, np.array(pwm[self.wvar[i]]*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
-            pwm[self.wvar[i]]=value
-            del value
+    A_rot = griddata(points, values, points_new, method='nearest')
+    A_rot = A_rot.reshape(A.shape)
 
-    else:
-        if str(wvar).upper()=="HS" or str(wvar).upper()=="SWH":
-            value = griddata(rotated_points, np.array(pwm['Hs']*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
-            pwm['Hs']=value
-            del value
-
-        elif str(wvar).upper()=="TP":
-            value = griddata(rotated_points, np.array(pwm['Tp']*gdist).ravel(), (pwm['lon'], pwm['lat']), method='linear')
-            pwm['Tp']=value
-            del value
-
-    return pwm
-
+    return A_rot  # <-- only 2D matrix returned
 
 
 if __name__ == "__main__":
@@ -217,7 +198,6 @@ if __name__ == "__main__":
 
     # -----------
 
-
     # resolution
     gres=np.diff(latm).mean()
     # displacement for the cyclone area
@@ -225,9 +205,9 @@ if __name__ == "__main__":
     # Final array of mask
     cmask=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'i')
     # Sector
-    csector=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'i')
+    csector=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')
     # unique cyclone names
-    cnameid=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'i')*np.nan
+    cnameid=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')-1.
     cnames=np.unique(iname) # 98 named cyclones inside the area.
 
     ct=0
@@ -235,8 +215,6 @@ if __name__ == "__main__":
     # loop through all times
     for t in range(0,ftime.shape[0]):
         cmask[t,:,:]=cmask[t,:,:]*maskm
-        csector[t,:,:]=csector[t,:,:]*maskm
-        cnameid[t,:,:]=cnameid[t,:,:]*maskm
         # search for cyclones on that time
         # Tropical cyclones
         indt = np.where( (it>=(ftime[t]-5401)) & (it<=(ftime[t]+5401)) )
@@ -261,37 +239,49 @@ if __name__ == "__main__":
 
                 cnid=np.where(cnames==iname[indt[i]])[0]
 
+                aux_csector = np.zeros((len(rlat),len(rlon)),'f')
                 for j in range(0,rlat.shape[0]):
                     for k in range(0,rlon.shape[0]):
                         cdist=float(geopy.distance.great_circle((latm[rlat[j]],lonm[rlon[k]]), (latm[indilat],lonm[indilon]) ).kilometers)
-                        if (cdist<=etrl) and (maskm[rlat[j],rlon[k]]>=0.):
-                            if inat[indt[i]]=='TS':
-                                cmask[t,rlat[j],rlon[k]]=int(5)
-                            elif inat[indt[i]]=='SS':
-                                cmask[t,rlat[j],rlon[k]]=int(4)
-                            elif inat[indt[i]]=='ET':
-                                cmask[t,rlat[j],rlon[k]]=int(3)
-                            elif inat[indt[i]]=='DS':
-                                cmask[t,rlat[j],rlon[k]]=int(2)
-                            else:
-                                cmask[t,rlat[j],rlon[k]]=int(1)
+                        if cdist<=etrl:
 
                             # Sector
                             if rlat[j]>=indilat and rlon[k]>indilon:
-                                csector[t,rlat[j],rlon[k]]=int(1)
+                                aux_csector[j,k]=int(1)
                             elif rlat[j]>=indilat and rlon[k]<=indilon:
-                                csector[t,rlat[j],rlon[k]]=int(2)
+                                aux_csector[j,k]=int(2)
                             elif rlat[j]<indilat and rlon[k]<=indilon:
-                                csector[t,rlat[j],rlon[k]]=int(3)
+                                aux_csector[j,k]=int(3)
                             elif rlat[j]<indilat and rlon[k]>indilon:
-                                csector[t,rlat[j],rlon[k]]=int(4)
+                                aux_csector[j,k]=int(4)
 
                             # Cyclone name ID
                             cnameid[t,rlat[j],rlon[k]]=int(cnid)
 
+                            if maskm[rlat[j],rlon[k]]>=0.:
+
+                                if inat[indt[i]]=='TS':
+                                    cmask[t,rlat[j],rlon[k]]=int(5)
+                                elif inat[indt[i]]=='SS':
+                                    cmask[t,rlat[j],rlon[k]]=int(4)
+                                elif inat[indt[i]]=='ET':
+                                    cmask[t,rlat[j],rlon[k]]=int(3)
+                                elif inat[indt[i]]=='DS':
+                                    cmask[t,rlat[j],rlon[k]]=int(2)
+                                else:
+                                    cmask[t,rlat[j],rlon[k]]=int(1)
+
                         del cdist
 
-                del rlat,rlon,indilat,indilon,cnid
+                # Rotate aux_csector
+                b_csector = np.zeros((len(rlat),len(rlon)),'f')
+                b_csector[:,:] = rotate_field(aux_csector, latm[rlat], lonm[rlon], icbearing[indt[i]])
+                for j in range(0,rlat.shape[0]):
+                    for k in range(0,rlon.shape[0]):
+                        if b_csector[j,k] > 0.:
+                            csector[t, rlat[j], rlon[k]] = b_csector[j,k]
+
+                del aux_csector,rlat,rlon,indilat,indilon,cnid,etrl
 
             del indt
 
@@ -312,7 +302,9 @@ if __name__ == "__main__":
     df.to_csv('cyclone_names.txt', index=False, header=False)
 
     # Save netcdf
-    cmask[cmask<0.]=-1; csector[csector<0.]=-1; cnameid[cnameid<0.]=-1;
+    csector[csector<0.]=-1.; csector=np.array(csector).astype('int')
+    cnameid[cnameid<0.]=-1.; cnameid=np.array(cnameid).astype('int')
+    cmask[cmask<0.]=-1; 
     ncfile = nc.Dataset('CycloneMap.nc', "w", format=fnetcdf) 
     ncfile.history='Cyclone Map using IBtracks cyclone tracks, with same grid resolution as GEFSv12 winds.'
     ncfile.info='IDs: 0(no cyclone); 1(Missing,conflicting,or not reported); 2(disturbance); 3(extratropical); 4(subtropical storm/cyclone); 5(tropical storm/cyclone)'
