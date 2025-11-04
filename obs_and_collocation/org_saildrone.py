@@ -45,7 +45,7 @@ if __name__ == "__main__":
     # Buoy data type
     buoyd="SAILDRONE"
     # data path
-    dpath="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/saildrones"
+    dpath="/data/saildrones"
     bnames = np.array(pd.read_csv(dpath+"/list.txt", header=None).values).astype('str')[:,0]
 
     # GridMask
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     latc=f.variables['lat'][:]; lonc=f.variables['lon'][:]; lonc[lonc>180]=lonc[lonc>180]-360.
     ctime = np.array(f.variables['time'][:]).astype('double')
     cmap = np.array(f.variables['cmap'][:,:,:]).astype('float')
-    # csec = np.array(f.variables['csec'][:,:,:]).astype('float')
+    csec = np.array(f.variables['csec'][:,:,:]).astype('float')
     cid = np.array(f.variables['cid'][:,:,:]).astype('float')
     f.close(); del f
     # cmap[cmap<0]=np.nan; cid[cid<0]=np.nan; csec[csec<0]=np.nan
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     ftime=[]; frtime=[]; bid=[]
     lat=[]; lon=[]; gidlat=[]; gidlon=[] 
     hs=[]; tp=[]; tm=[]; wnd=[] 
-    bcmap=[]; bcid=[]
+    bcmap=[]; bcid=[]; bcsec=[]
 
     for i in range(0,len(bnames)):
 
@@ -83,8 +83,8 @@ if __name__ == "__main__":
             wdic['hs']=quality_control_wave.data_range(wdic,var='hs',vmin=0.3,vmax=20.)
             wdic['hs']=quality_control_wave.duplicates(wdic)
             wdic['hs']=quality_control_wave.rate_of_change(wdic)
-            wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/gridInfo_TGPM.nc',mdepth=80,mdfc=5)
-            wdic['hs']=quality_control_wave.model_compare(wdic,gpath='/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/data/GDAS',mdist=None)
+            wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='/2collocation/gridInfo_TGPM.nc',mdepth=80,mdfc=5)
+            wdic['hs']=quality_control_wave.model_compare(wdic,gpath='/data/GDAS',mdist=None)
             print(" OK - QC for "+fname+" "+bnames[i])
 
             ind=np.where(wdic['hs']>0.1)
@@ -119,7 +119,7 @@ if __name__ == "__main__":
                 blat=[]; blon=[]; aindt=np.array([]).astype('int')
                 bhs=[]; bwnd=[]; btp=[]; btm=[]
                 btime=np.double([]); brt=np.double([])
-                abcmap=[]; abcid=[]; # abcsec=[]
+                abcmap=[]; abcid=[]; abcsec=[]
                 agidlat=[]; agidlon=[]; abid=[]
                 c=0
                 for t in range(0,len(at)):
@@ -152,18 +152,18 @@ if __name__ == "__main__":
                             if cmap[np.min(indc[0]),indlat,indlon]>0:
                                 abcmap = np.append(abcmap,int(cmap[np.min(indc[0]),indlat,indlon]))
                                 abcid = np.append(abcid,int(cid[np.min(indc[0]),indlat,indlon]))
-                                # abcsec = np.append(abcsec,int(csec[np.min(indc[0]),indlat,indlon]))
+                                abcsec = np.append(abcsec,int(csec[np.min(indc[0]),indlat,indlon]))
                             else:
                                 abcmap = np.append(abcmap,0)
                                 abcid = np.append(abcid,0)
-                                # abcsec = np.append(abcsec,0)
+                                abcsec = np.append(abcsec,0)
 
                             del indlat,indlon
 
                         else:
                             abcmap = np.append(abcmap,0)
                             abcid = np.append(abcid,0)
-                            # abcsec = np.append(abcsec,0)
+                            abcsec = np.append(abcsec,0)
 
                         del indc
 
@@ -173,8 +173,9 @@ if __name__ == "__main__":
 
                 # Final arrays
                 if np.size(abcid)>0:
-                    aux=np.zeros(btime.shape[0],'i').astype('str'); aux[:]="SAILDRONE"+bnames[i].split('_')[0][2::]
-                    abid = np.append(abid,aux); del aux
+                    abot="SAILDRONE"+''.join(bnames[i].split('_')[0][2::])
+                    aux=np.full(btime.shape[0], abot, dtype=f'<U{len(abot)}')
+                    abid = np.append(abid,aux); del aux, abot
 
                     btime=np.array(btime).astype('double'); brt=np.array(brt).astype('double')
                     agidlat=np.array(agidlat).astype('int'); agidlon=np.array(agidlon).astype('int')
@@ -186,7 +187,7 @@ if __name__ == "__main__":
                     hs=np.append(hs,bhs); tp=np.append(tp,btp); tm=np.append(tm,btm); wnd=np.append(wnd,bwnd)
                     bcmap = np.append(bcmap,abcmap)
                     abcid[abcid<0]=0.; abcid[np.isnan(abcid)==True]=0.; bcid = np.append(bcid,abcid)
-                    # bcsec = np.append(bcsec,abcsec)
+                    abcsec[abcsec<0]=0.; abcsec[np.isnan(abcsec)==True]=0.; bcsec = np.append(bcsec,abcsec)
 
                 print(bnames[i]+" done")
 
@@ -206,7 +207,7 @@ if __name__ == "__main__":
         hs=np.round(hs,4); tp=np.round(tp,4); tm=np.round(tm,4); wnd=np.round(wnd,4)
         lat=np.round(lat,5); lon=np.round(lon,5); # glat=np.round(glat,5); glon=np.round(glon,5)
         gidlat=np.array(gidlat).astype('int'); gidlon=np.array(gidlon).astype('int')
-        bcmap=np.array(bcmap).astype('int'); bcid=np.array(bcid).astype('int')
+        bcmap=np.array(bcmap).astype('int'); bcid=np.array(bcid).astype('int'); bcsec=np.array(bcsec).astype('int')
 
         # Save wdics
         df = pd.DataFrame({
@@ -220,7 +221,7 @@ if __name__ == "__main__":
             'gidlon': gidlon,
             'id': bid,
             'cmap': bcmap,
-            # 'csec': bcsec,
+            'csec': bcsec,
             'cid': bcid,
             'hs': hs,
             'tm': tm,

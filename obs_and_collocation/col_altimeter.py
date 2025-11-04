@@ -88,9 +88,9 @@ if __name__ == "__main__":
     auxlon=np.array(np.arange(np.floor(ablon.min())-1.,np.ceil(ablon.max())+1.,1)).astype('int')
 
     # Read and allocate satellite data into arrays
-    ast=np.double(np.zeros((10**pia),'d')); aslat=np.zeros((10**pia),'f'); aslon=np.zeros((10**pia),'f');
+    ast=np.double(np.zeros((10**pia),'d')); aslat=np.zeros((10**pia),'f'); aslon=np.zeros((10**pia),'f')
     ahskcal=np.zeros((10**pia),'f')
-    awndcal=np.zeros((10**pia),'f'); asig0knstd=np.zeros((10**pia),'f');
+    awndcal=np.zeros((10**pia),'f'); asig0knstd=np.zeros((10**pia),'f')
     aswhknobs=np.zeros((10**pia),'f'); aswhknstd=np.zeros((10**pia),'f'); aswhkqc=np.zeros((10**pia),'f')
     ii=0
     for j in auxlat:
