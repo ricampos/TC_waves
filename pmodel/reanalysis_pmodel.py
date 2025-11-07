@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
- 3-year reanalysis of tropical cyclones using PModel, for the Atlantic and Pacific domains.
- It is based on ibtracs tracks and information. Results are produced for a high resolution 5km grid.
- See TCpwaves.py for the modeling
- Output parameters are significant wave height (Hs) and peak period (Tp)
+ Script to run a reanalysis of tropical cyclones using PModel, for the Atlantic and Pacific domains.
+ It is based on ibtracs tracks. Results are produced for a high resolution 5km grid (gridInfo.nc).
+ See TCpwaves.py and pmodel_config.yaml for the parametric modeling
+ This code is run for one month. Input arguments are: year month string_tag
+ Output parameters are significant wave height (Hs), peak period (Tp), and wind (U and V components)
 """
 
 import matplotlib
