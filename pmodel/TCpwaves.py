@@ -217,6 +217,47 @@ def read_atcf(fname):
     # ctrack(np.array(model['AC00']['lat'][ind]),np.array(model['AC00']['lon'][ind]),model['AC00']['time'][ind],np.array(model['AC00']['wind'][ind]),flabel="test_AC",ftitle="test_AC")
 
 
+def read_ibtracs(fname):
+    '''
+    Read IBTracks text data
+    ibtracs.last3years.list.v04r01.csv
+    Only named storms are selected
+    IBTRACKS V4 data. It can be downloaded at
+    https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r00/access/csv/
+    https://www.ncdc.noaa.gov/ibtracs/index.php?name=bib
+    '''
+    dfibtr = pd.read_csv(fname, header=[0,1])
+    inat = np.array(dfibtr.values[:,7]); iname=np.array(dfibtr['NAME'].values[:][:,0]).astype('str')
+    icyid = np.array(dfibtr['NUMBER'].values[:][:,0]).astype('int')
+    ity = np.array(pd.Series(dfibtr['ISO_TIME'].values.flatten()).str.slice(0,4)).astype('int')
+    itm = np.array(pd.Series(dfibtr['ISO_TIME'].values.flatten()).str.slice(5,7)).astype('int')
+    itd = np.array(pd.Series(dfibtr['ISO_TIME'].values.flatten()).str.slice(8,10)).astype('int')
+    ith = np.array(pd.Series(dfibtr['ISO_TIME'].values.flatten()).str.slice(11,13)).astype('int')
+    itime = pd.to_datetime(dfibtr['ISO_TIME'].values[:,0])
+    ilat = np.array(dfibtr['LAT'].values[:,0]).astype('float')
+    ilon = np.array(dfibtr['LON'].values[:,0]).astype('float')
+    iVmax = np.array(dfibtr['USA_WIND'].replace(' ', np.nan).values[:,0]).astype('float') # wind in knots
+    iVfm = np.array(dfibtr['STORM_SPEED'].replace(' ', np.nan).values[:,0]).astype('float')/1.94384
+    iRmax = np.array(dfibtr['USA_RMW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.
+    iR34 = np.array(np.mean(np.array([dfibtr['USA_R34_NE'].replace(' ', np.nan).values[:,0],dfibtr['USA_R34_SE'].replace(' ', np.nan).values[:,0],
+        dfibtr['USA_R34_SW'].replace(' ', np.nan).values[:,0],dfibtr['USA_R34_NW'].replace(' ', np.nan).values[:,0]]).astype('float'),axis=0)*1.852*1000.)
+
+    print('read_ibtracs: Ibtracks ok'); del dfibtr
+    ind=np.where(iname!="UNNAMED")
+    ity=np.copy(ity[ind[0]]);itm=np.copy(itm[ind[0]]); itd=np.copy(itd[ind[0]]); ith=np.copy(ith[ind[0]]); itime=np.copy(itime[ind[0]])
+    icyid=np.copy(icyid[ind[0]]); iname=np.copy(iname[ind[0]]); ilat=np.copy(ilat[ind[0]]);ilon=np.copy(ilon[ind[0]]);inat=np.copy(inat[ind[0]])
+    iVmax=np.copy(iVmax[ind[0]]); iVfm=np.copy(iVfm[ind[0]]); iRmax=np.copy(iRmax[ind[0]]); iR34=np.copy(iR34[ind[0]])
+    del ind
+    # ilon[ilon<0]=ilon[ilon<0]+360.
+
+    icyid = np.char.add(ity.astype(int).astype(str), np.char.zfill(icyid.astype(int).astype(str), 3))
+
+    wibtr={'ity':ity,'itm':itm,'itd':itd,'ith':ith,'itime':pd.to_datetime(itime),'icyid':np.array(icyid).astype('int'),'iname':iname,'ilat':ilat,'ilon':ilon,'inat':inat,
+        'iVmax':iVmax,'iVfm':iVfm,'iRmax':iRmax,'iR34':iR34}
+
+    return wibtr
+
+
 def bearing(lat1, lon1, lat2, lon2):
     """
     Calculate the propagation direction (going to), based on two pairs of lat/lons
