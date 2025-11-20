@@ -236,11 +236,11 @@ def read_ibtracs(fname):
     itime = pd.to_datetime(dfibtr['ISO_TIME'].values[:,0])
     ilat = np.array(dfibtr['LAT'].values[:,0]).astype('float')
     ilon = np.array(dfibtr['LON'].values[:,0]).astype('float')
-    iVmax = np.array(dfibtr['USA_WIND'].replace(' ', np.nan).values[:,0]).astype('float') # wind in knots
-    iVfm = np.array(dfibtr['STORM_SPEED'].replace(' ', np.nan).values[:,0]).astype('float')/1.94384
-    iRmax = np.array(dfibtr['USA_RMW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.
+    iVmax = np.array(dfibtr['USA_WIND'].replace(' ', np.nan).values[:,0]).astype('float')/1.94384 # max wind speed in m/s
+    iVfm = np.array(dfibtr['STORM_SPEED'].replace(' ', np.nan).values[:,0]).astype('float')/1.94384 # forward speed in m/s
+    iRmax = np.array(dfibtr['USA_RMW'].replace(' ', np.nan).values[:,0]).astype('float')*1852. # in meters
     iR34 = np.array(np.mean(np.array([dfibtr['USA_R34_NE'].replace(' ', np.nan).values[:,0],dfibtr['USA_R34_SE'].replace(' ', np.nan).values[:,0],
-        dfibtr['USA_R34_SW'].replace(' ', np.nan).values[:,0],dfibtr['USA_R34_NW'].replace(' ', np.nan).values[:,0]]).astype('float'),axis=0)*1.852*1000.)
+        dfibtr['USA_R34_SW'].replace(' ', np.nan).values[:,0],dfibtr['USA_R34_NW'].replace(' ', np.nan).values[:,0]]).astype('float'),axis=0)*1852.)
 
     print('read_ibtracs: Ibtracks ok'); del dfibtr
     ind=np.where(iname!="UNNAMED")

@@ -88,7 +88,6 @@ if __name__ == "__main__":
 
             for i in range(0,len(indt)):
 
-                iVmax=wibtr['iVmax'][indt][i]/1.94384 # Pmodel wind in m/s
                 # heading directions
                 indc = np.where(wibtr['icyid'] == wibtr['icyid'][indt][i])[0]
                 rangle = cbearing(wibtr['ilat'][indc],wibtr['ilon'][indc])
