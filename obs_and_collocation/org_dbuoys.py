@@ -45,7 +45,7 @@ if __name__ == "__main__":
     # Buoy data type
     buoyd="DWSD"
     # data path
-    dpath="/data/DWSD"
+    dpath="data/DWSD"
 
     # GridMask
     f=nc.Dataset('gridInfo_TGPM.nc')
@@ -104,7 +104,7 @@ if __name__ == "__main__":
                 wdic['hs']=quality_control_wave.data_range(wdic,var='hs',vmin=0.3,vmax=20.)
                 wdic['hs']=quality_control_wave.duplicates(wdic)
                 wdic['hs']=quality_control_wave.rate_of_change(wdic)
-                wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='/2collocation/gridInfo_TGPM.nc',mdepth=80,mdfc=5)
+                wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='gridInfo_TGPM.nc',mdepth=80,mdfc=5)
                 # wdic['hs']=quality_control_wave.model_compare(wdic,gpath=None,mdist=None)
                 print(" OK - QC for "+fname+" "+bnames[i])
 
@@ -162,7 +162,7 @@ if __name__ == "__main__":
                             # Model position index
                             indlat = np.where( np.abs(latm-alat[t]) == np.nanmin(np.abs(latm-alat[t])) )[0][0]
                             indlon = np.where( np.abs(lonm-alon[t]) == np.nanmin(np.abs(lonm-alon[t])) )[0][0]
-                            agidlat = np.append(agidlat,int(indlat)); agidlon = np.append(agidlon,int(indlat))
+                            agidlat = np.append(agidlat,int(indlat)); agidlon = np.append(agidlon,int(indlon))
                             del indlat, indlon
 
                             # check cyclone presence
