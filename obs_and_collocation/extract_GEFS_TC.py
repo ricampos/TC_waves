@@ -55,7 +55,13 @@ if __name__ == "__main__":
                                 gres[ind[j],2] = float(glon[indlon])
 
                                 for k in range(0,len(gvarn)):
-                                    gres[ind[j],3+k] = float(f.variables[gvarn[k]][i,indlat,indlon])
+                                    gaux = float(f.variables[gvarn[k]][i,indlat,indlon])
+                                    if f.variables[gvarn[k]][i,indlat,indlon] > -999.:
+                                        gres[ind[j],3+k] = gaux
+                                    else:
+                                        gres[ind[j],3+k] = float(-999.)
+
+                                    del gaux
 
                                 del indlat,indlon
 
