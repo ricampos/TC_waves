@@ -53,7 +53,7 @@ USAGE:
   https://doi.org/10.26188/27237156 , and great support provided by Guisela Grossmann-Matheson
 
 OUTPUT:
- Wave information (Hs and Tp) for the given cyclones.
+ Wave information (Hs, Tp, and direction) for the given cyclones.
 
 DEPENDENCIES:
  See he imports below.
@@ -450,7 +450,7 @@ class TCWaves:
         self.Rmax = float(Rmax); self.R34 = float(R34)
         self.Lat = float(Lat); self.Lon = float(Lon)
         self.wdname = str(wdname)
-        self.wvar = np.array(['Hs','Tp','Uwnd','Vwnd']).astype('str')
+        self.wvar = np.array(['Hs','Tp','Uw','Vw']).astype('str')
 
 
     def PWModel(self):
@@ -516,7 +516,7 @@ class TCWaves:
 
         result={'xrm':ds['xrm'].values[:],'yrm':ds['yrm'].values[:],
         'Hs':np.array(HS),'Tp':np.array(TP),
-        'Uwnd':np.array(UU), 'Vwnd':np.array(VV)}
+        'Uw':np.array(UU), 'Vw':np.array(VV)}
 
         return result
         del HS, TP, UU, VV
@@ -602,9 +602,9 @@ class TCWaves:
         if wvar=="all":
             WFHs = griddata(tcgrid, pwm['Hs'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Hs'].shape)
             WFTp = griddata(tcgrid, pwm['Tp'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Tp'].shape)
-            WFUwnd = griddata(tcgrid, pwm['Uwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Uwnd'].shape)
-            WFVwnd = griddata(tcgrid, pwm['Vwnd'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Vwnd'].shape)
-            WW={'lat':W['lat'],'lon':W['lon'],'Hs':WFHs, 'Tp':WFTp, 'Uwnd':WFUwnd, 'Vwnd':WFVwnd}
+            WFUw = griddata(tcgrid, pwm['Uw'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Uw'].shape)
+            WFVw = griddata(tcgrid, pwm['Vw'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Vw'].shape)
+            WW={'lat':W['lat'],'lon':W['lon'],'Hs':WFHs, 'Tp':WFTp, 'Uw':WFUw, 'Vw':WFVw}
         else:
             if str(wvar).upper()=="HS" or str(wvar).upper()=="SWH":
                 WFHs = griddata(tcgrid, pwm['Hs'].ravel(), target_grid, method='linear', fill_value=np.nan).reshape(W['Hs'].shape)
