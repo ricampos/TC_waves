@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Colocate altimeter data into observation space/time
+"""
+
 import numpy as np
 from matplotlib.mlab import *
 import pandas as pd

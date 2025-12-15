@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+ Extract reanalysis data to pair with observations
+"""
+
 import numpy as np
 import pandas as pd
 import netCDF4 as nc
