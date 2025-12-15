@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Extract HAFS data (analysis and first hours only) and match with observation space/time
+"""
+
 import sys
 import numpy as np
 import pandas as pd

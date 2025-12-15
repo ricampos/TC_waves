@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Script for triple collocation (model, altimeter, in-situ obs). 10-m wind speed
+Based on Janssen et al (2007) Section 2
+ https://doi.org/10.1175/JTECH2069.1
+And Houghton et al (2021) Section 2
+ https://doi.org/10.1175/JTECH-D-20-0187.1
+"""
+
 import numpy as np
 from matplotlib.mlab import *
 import pandas as pd
