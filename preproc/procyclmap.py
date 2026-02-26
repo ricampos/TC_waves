@@ -45,6 +45,8 @@ PERSON OF CONTACT:
 
 """
 
+# next step: include coordinates (spherical) of point inside the cyclone
+
 import pylab
 from pylab import *
 from matplotlib.mlab import *
