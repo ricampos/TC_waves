@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
                             # coordinates relative to the center of the cyclone
                             dist, ang, sinang, cosang = distance_motion_angle(latm[indilat],lonm[indilon],latm[rlat[j]],lonm[rlon[k]],icbearing[indt[i]])
-                            cposdist[t,j,k] = int(round(dist)); cpossin[t,j,k] = float(sinang); cposcos[t,j,k] = float(cosang)
+                            cposdist[t,rlat[j],rlon[k]] = int(round(dist)); cpossin[t,rlat[j],rlon[k]] = float(sinang); cposcos[t,rlat[j],rlon[k]] = float(cosang)
                             del dist, ang, sinang, cosang
 
                             # Cyclone name ID
