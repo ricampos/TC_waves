@@ -8,6 +8,7 @@ VERSION AND LAST UPDATE:
  v1.0  04/04/2022
  v2.0  10/23/2025
  v2.1  02/26/2026
+ v2.2  03/04/2026
 
 PURPOSE:
  This script creates a map with cyclone information, using the gridInfo 
@@ -41,14 +42,13 @@ DEPENDENCIES:
 
 AUTHOR and DATE:
  04/04/2022: Ricardo M. Campos, first version.
- 02/26/2026: Ricardo M. Campos, updated ibtracks with recent data and include point position
+ 02/26/2026: Ricardo M. Campos, updated ibtracks with recent data and include point position.
+ 03/04/2026: Ricardo M. Campos, better methodology when cyclones are overlapped or blending.
 
 PERSON OF CONTACT:
  Ricardo M Campos: ricardo.campos@noaa.gov
 
 """
-
-# next step: include coordinates (spherical) of point inside the cyclone
 
 import pylab
 from pylab import *
@@ -127,7 +127,6 @@ def distance_angle(latC, lonC, latA, lonA):
     angle_met = (np.pi/2 - angle_math) % (2*np.pi)
 
     return int(round(distance_km)), int(round(np.degrees(angle_met)))
-
 
 def rotate_field(A, lat, lon, x_dir):
     """
@@ -240,7 +239,7 @@ if __name__ == "__main__":
     # Sectors
     csector=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
     # Coordinates of each point related to the center of the cyclone
-    cposdist=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
+    cposdist=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)+9999
     cangle=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
     # unique cyclone names
     cnameid=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)-1
@@ -276,13 +275,14 @@ if __name__ == "__main__":
                 cnid=np.where(cnames==iname[indt[i]])[0]
 
                 aux_csector = np.zeros((len(rlat),len(rlon)),'f')
+                overlap_csector = np.zeros((len(rlat),len(rlon)),dtype=np.int32)
                 for j in range(0,rlat.shape[0]):
                     for k in range(0,rlon.shape[0]):
                         cdist=float(geopy.distance.great_circle((latm[rlat[j]],lonm[rlon[k]]), (latm[indilat],lonm[indilon]) ).kilometers)
                         if cdist<=etrl:
                             # print(repr(t)+" "+repr(i)+" "+repr(j)+" "+repr(k))
 
-                            # Sector
+                            # Sectors
                             if rlat[j]>=indilat and rlon[k]>indilon:
                                 aux_csector[j,k]=int(1)
                             elif rlat[j]>=indilat and rlon[k]<=indilon:
@@ -294,33 +294,40 @@ if __name__ == "__main__":
 
                             # coordinates relative to the center of the cyclone
                             dist, ang = distance_angle(latm[indilat],lonm[indilon],latm[rlat[j]],lonm[rlon[k]])
-                            cposdist[t,rlat[j],rlon[k]] = int(round(dist)); cangle[t,rlat[j],rlon[k]] = int(round(ang))
+
+                            if dist < cposdist[t,rlat[j],rlon[k]]:
+
+                                cposdist[t,rlat[j],rlon[k]] = int(round(dist))
+                                cangle[t,rlat[j],rlon[k]] = int(round(ang))
+
+                                # Sector when overlapped
+                                overlap_csector[j,k]=1
+
+                                # Cyclone name ID
+                                cnameid[t,rlat[j],rlon[k]]=int(cnid)
+
+                                if inat[indt[i]]=='TS':
+                                    cmask[t,rlat[j],rlon[k]]=int(5)
+                                elif inat[indt[i]]=='SS':
+                                    cmask[t,rlat[j],rlon[k]]=int(4)
+                                elif inat[indt[i]]=='ET':
+                                    cmask[t,rlat[j],rlon[k]]=int(3)
+                                elif inat[indt[i]]=='DS':
+                                    cmask[t,rlat[j],rlon[k]]=int(2)
+                                else:
+                                    cmask[t,rlat[j],rlon[k]]=int(1)
+
                             del dist, ang
-
-                            # Cyclone name ID
-                            cnameid[t,rlat[j],rlon[k]]=int(cnid)
-
-                            # if maskm[rlat[j],rlon[k]]>=0.:
-
-                            if inat[indt[i]]=='TS':
-                                cmask[t,rlat[j],rlon[k]]=int(5)
-                            elif inat[indt[i]]=='SS':
-                                cmask[t,rlat[j],rlon[k]]=int(4)
-                            elif inat[indt[i]]=='ET':
-                                cmask[t,rlat[j],rlon[k]]=int(3)
-                            elif inat[indt[i]]=='DS':
-                                cmask[t,rlat[j],rlon[k]]=int(2)
-                            else:
-                                cmask[t,rlat[j],rlon[k]]=int(1)
 
                         del cdist
 
                 # Rotate aux_csector
                 b_csector = np.zeros((len(rlat),len(rlon)),'f')
                 b_csector[:,:] = rotate_field(aux_csector, latm[rlat], lonm[rlon], icbearing[indt[i]])
+                # overlap_csector[:,:] = rotate_field(overlap_csector, latm[rlat], lonm[rlon], icbearing[indt[i]])
                 for j in range(0,rlat.shape[0]):
                     for k in range(0,rlon.shape[0]):
-                        if b_csector[j,k] > 0.:
+                        if b_csector[j,k] > 0. and overlap_csector[j,k] == 1:
                             csector[t, rlat[j], rlon[k]] = int(b_csector[j,k])
 
                 del aux_csector,rlat,rlon,indilat,indilon,cnid,etrl
@@ -338,6 +345,7 @@ if __name__ == "__main__":
     ftime=ftime[indtok]
     cmask=cmask[indtok,:,:]; csector=csector[indtok,:,:]; cnameid=cnameid[indtok,:,:]
     cposdist=cposdist[indtok,:,:]; cangle=cangle[indtok,:,:]
+    cposdist[cposdist==9999]=-1
 
     print(" Selected dates with active cyclones only")
 
