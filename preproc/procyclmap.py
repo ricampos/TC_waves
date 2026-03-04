@@ -102,33 +102,32 @@ def cbearing(alat,alon):
     avg_dir_deg = (np.rad2deg(avg_dir_rad) + 360) % 360
     return avg_dir_deg
 
-def distance_motion_angle(latC, lonC, latA, lonA, icb):
+def distance_angle(latC, lonC, latA, lonA):
     """
     Distance and angle of point A relative to cyclone motion.
-    icb : cyclone propagation bearing (radians, from north, clockwise)
     """
     R = 6371.0  # Earth radius (km)
+
     # radians
-    lat1 = np.radians(latA); lon1 = np.radians(lonA)
-    lat2 = np.radians(latC); lon2 = np.radians(lonC)
-    dlat = lat2 - lat1; dlon = lon2 - lon1
+    latC = np.radians(latC); lonC = np.radians(lonC)
+    latA = np.radians(latA); lonA = np.radians(lonA)
+    dlat = latA - latC; dlon = lonA - lonC
 
     # ---- distance (haversine) ----
-    a = (np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2)
-    c = 2*np.arctan2(np.sqrt(a), np.sqrt(1-a)); distance_km = R * c
+    a = (np.sin(dlat/2)**2 + np.cos(latC)*np.cos(latA)*np.sin(dlon/2)**2)
+    c = 2*np.arctan2(np.sqrt(a), np.sqrt(1-a))
+    distance_km = R * c
 
-    # ---- bearing C -> A (north-referenced) ----
-    y = np.sin(dlon) * np.cos(lat2)
-    x = (np.cos(lat1)*np.sin(lat2) - np.sin(lat1)*np.cos(lat2)*np.cos(dlon))
+    # ---- local Cartesian (east, north) ----
+    x = R * np.cos(latC) * dlon # east
+    y = R * dlat # north
+    # mathematical angle (east=0, CCW)
+    angle_math = np.arctan2(y, x)
+    # convert to meteorological (north=0, clockwise)
+    angle_met = (np.pi/2 - angle_math) % (2*np.pi)
 
-    bearing_CA = np.arctan2(y, x)
-    bearing_CA = (bearing_CA + 2*np.pi) % (2*np.pi)
+    return int(round(distance_km)), int(round(np.degrees(angle_met)))
 
-    # ---- angle relative to cyclone motion ----
-    angle_rel = (bearing_CA - icb) % (2*np.pi)
-    sin_rel = np.sin(angle_rel); cos_rel = np.cos(angle_rel)
-
-    return distance_km, np.degrees(angle_rel), sin_rel, cos_rel
 
 def rotate_field(A, lat, lon, x_dir):
     """
@@ -237,15 +236,14 @@ if __name__ == "__main__":
     # displacement for the cyclone area
     dglat = int(np.ceil(((etr/100.)+1.0)/gres))
     # Final array of cyclone map with type information
-    cmask=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'i')
+    cmask=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
     # Sectors
-    csector=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')
+    csector=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
     # Coordinates of each point related to the center of the cyclone
-    cposdist=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'int')
-    cpossin=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')*np.nan
-    cposcos=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')*np.nan
+    cposdist=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
+    cangle=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)
     # unique cyclone names
-    cnameid=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),'f')-1.
+    cnameid=np.zeros((ftime.shape[0],maskm.shape[0],maskm.shape[1]),dtype=np.int32)-1
     cnames=np.unique(iname)
 
     ct=0
@@ -295,9 +293,9 @@ if __name__ == "__main__":
                                 aux_csector[j,k]=int(4)
 
                             # coordinates relative to the center of the cyclone
-                            dist, ang, sinang, cosang = distance_motion_angle(latm[indilat],lonm[indilon],latm[rlat[j]],lonm[rlon[k]],icbearing[indt[i]])
-                            cposdist[t,rlat[j],rlon[k]] = int(round(dist)); cpossin[t,rlat[j],rlon[k]] = float(sinang); cposcos[t,rlat[j],rlon[k]] = float(cosang)
-                            del dist, ang, sinang, cosang
+                            dist, ang = distance_angle(latm[indilat],lonm[indilon],latm[rlat[j]],lonm[rlon[k]])
+                            cposdist[t,rlat[j],rlon[k]] = int(round(dist)); cangle[t,rlat[j],rlon[k]] = int(round(ang))
+                            del dist, ang
 
                             # Cyclone name ID
                             cnameid[t,rlat[j],rlon[k]]=int(cnid)
@@ -323,7 +321,7 @@ if __name__ == "__main__":
                 for j in range(0,rlat.shape[0]):
                     for k in range(0,rlon.shape[0]):
                         if b_csector[j,k] > 0.:
-                            csector[t, rlat[j], rlon[k]] = b_csector[j,k]
+                            csector[t, rlat[j], rlon[k]] = int(b_csector[j,k])
 
                 del aux_csector,rlat,rlon,indilat,indilon,cnid,etrl
 
@@ -339,7 +337,7 @@ if __name__ == "__main__":
     indtok=np.array(indtok).astype('int')
     ftime=ftime[indtok]
     cmask=cmask[indtok,:,:]; csector=csector[indtok,:,:]; cnameid=cnameid[indtok,:,:]
-    cposdist=cposdist[indtok,:,:]; cpossin=cpossin[indtok,:,:]; cposcos=cposcos[indtok,:,:]
+    cposdist=cposdist[indtok,:,:]; cangle=cangle[indtok,:,:]
 
     print(" Selected dates with active cyclones only")
 
@@ -348,11 +346,11 @@ if __name__ == "__main__":
     df.to_csv('cyclone_names.txt', index=False, header=False)
 
     # Save netcdf
-    csector[csector<0.]=-1.; csector=np.array(csector).astype('int')
-    cnameid[cnameid<0.]=-1.; cnameid=np.array(cnameid).astype('int')
+    csector[csector<0.]=-1; csector = np.array(csector).astype(np.int32)
+    cnameid[cnameid<0.]=-1; cnameid=np.array(cnameid).astype(np.int32)
     cmask[cmask<0.]=-1; 
     ncfile = nc.Dataset('CycloneMap.nc', "w", format=fnetcdf) 
-    ncfile.history='Cyclone Map based on IBtracks cyclone tracks.'
+    ncfile.history='Cyclone Map based on IBtracks cyclone tracks. Sectors are rotated with cyclone heading angle. ccangle is not rotated with that (will do later in the AI/ML preprocessing)'
     ncfile.info='IDs: 0(no cyclone); 1(Missing,conflicting,or not reported); 2(disturbance); 3(extratropical); 4(subtropical storm/cyclone); 5(tropical storm/cyclone)'
     # create  dimensions.
     ncfile.createDimension('time', ftime.shape[0])
@@ -363,8 +361,7 @@ if __name__ == "__main__":
     vcsec = ncfile.createVariable('csec',np.dtype('int32'),('time','lat','lon'))
     vcid = ncfile.createVariable('cid',np.dtype('int32'),('time','lat','lon'))
     vcdist = ncfile.createVariable('ccdist',np.dtype('int32'),('time','lat','lon'))
-    vccsin = ncfile.createVariable('ccsin',np.dtype('float32'),('time','lat','lon'))
-    vcccos = ncfile.createVariable('cccos',np.dtype('float32'),('time','lat','lon'))
+    vcangle = ncfile.createVariable('ccangle',np.dtype('int32'),('time','lat','lon'))
     #
     vt = ncfile.createVariable('time',np.dtype('float64'),('time'))
     vlat = ncfile.createVariable('lat',np.dtype('float32'),('lat',))
@@ -375,7 +372,7 @@ if __name__ == "__main__":
     # Allocate Data
     vt[:] = ftime[:]; vlat[:] = latm[:]; vlon[:] = lonm[:]
     vcmap[:,:,:] = cmask; vcsec[:,:,:] = csector; vcid[:,:,:] = cnameid
-    vcdist[:,:,:] = cposdist; vccsin[:,:,:] = cpossin; vcccos[:,:,:] = cposcos
+    vcdist[:,:,:] = cposdist; vcangle[:,:,:] = cangle
     ncfile.close()
     print('netcdf ok ')
 
