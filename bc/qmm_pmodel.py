@@ -30,7 +30,7 @@ matplotlib.rc('xtick', labelsize=sl); matplotlib.rc('ytick', labelsize=sl); matp
 def qm_train(model=None,obs=None,prob=np.nan):
     """ 
     Univariate linear regression calibration using the Quantile Mapping Method.
-    Base on:
+    Based on:
      https://doi.org/10.3390/rs14194918
      https://doi.org/10.1080/01621459.2014.929522
      https://doi.org/10.1016/j.jhydrol.2010.10.024
@@ -82,6 +82,13 @@ def qmcal(model=None,slope=1.,intercept=0.,pprint='yes'):
 
     return np.array(model_cal).astype('float')
 
+# For each date, check if it falls inside any interval of PTC advisories
+def is_inside_any_interval(date, df):
+    for _, row in df.iterrows():
+        if date >= row['date_start'] and date <= row['date_end']:
+            return 1
+    return 0
+
 
 if __name__ == "__main__":
 
@@ -90,6 +97,7 @@ if __name__ == "__main__":
     # Read Obs
     df = pd.read_csv('Data_Obs_PModel_Default.txt', sep='\t')
     ot = df.time.values
+    ot_dt = pd.to_datetime(ot.astype(str), format='%Y%m%d%H%M') # datetime
     ohs = np.array(df['obs_hs']); mhs = np.array(df['pm_hs'])
     oid = np.array(df['id']).astype('str')
     cmap = np.array(df['cmap'])
@@ -102,18 +110,31 @@ if __name__ == "__main__":
     # idx = np.where( (np.char.startswith(oid, 'DWSD')!=True) | (np.char.startswith(oid, 'MICROSWIFT')!=True) | (np.char.startswith(oid, 'SAILDRONE')!=True))
     # oid=oid[idx]; ohs=ohs[idx]; mhs=mhs[idx]; cmap=cmap[idx]; ot=ot[idx]
 
+    # Read PTC advisories
+    df = pd.read_csv('ptc_advisories.txt', sep='\s+', header=None, names=['id', 'date_start', 'date_end'])
+    # convert to datetime
+    df['date_start'] = pd.to_datetime(df['date_start'], format='%Y%m%d%H')
+    df['date_end']   = pd.to_datetime(df['date_end'],   format='%Y%m%d%H')
+
+    # ptc advisories
+    ptc_mask = np.array([is_inside_any_interval(d, df) for d in ot_dt])
+
     # Headers
     hd = 'mean, variance, skewness, kurtosis, min, max, percentile80, percentile90, percentile95, percentile99, percentile99.9'
     merrname=["bias","RMSE","NBias","NRMSE","SCrmse","SI","HH","CC","N","bias_p95","RMSE_p95","N_p95"]
 
     # loop through the cathegories
-    acmap=np.array([2,3,4,5]); ncmap=np.array(["Disturbance","ExtrCycl","Subtrop","TropCycl"]).astype('str')
-    
+    acmap=np.array([2,3,4,5]); ncmap=np.array(["Disturbance","ExtrCycl","Subtrop","TropCycl","PTC"]).astype('str')
 
-    for i in range(0,len(acmap)):
+    for i in range(0,len(ncmap)):
 
-        # ---- Hs ----
-        ind = np.where( (ohs>1.) & (mhs>1.) & (cmap==acmap[i]) )
+        print(ncmap[i])
+        if ncmap[i] == "PTC":
+            # subsample based on IBtracks AND given start date and end date (txt and excel)
+            ind = np.where( (ohs>1.) & (mhs>1.) & (ptc_mask==1) )
+        else:
+            ind = np.where( (ohs>1.) & (mhs>1.) & (cmap==acmap[i]) )
+
         if np.size(ind)>0:
             ind=ind[0]
 
