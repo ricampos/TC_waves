@@ -7,7 +7,7 @@ cd ${DIRSCRIPTS}
 
 CTAG="Default"
 
-for YEAR in `seq 2022 2024`; do
+for YEAR in `seq 2025 2025`; do
   for MONTH in `seq 6 11`; do
     export YEAR=${YEAR}
     export MONTH=${MONTH}
