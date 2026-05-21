@@ -345,7 +345,7 @@ if __name__ == "__main__":
     ftime=ftime[indtok]
     cmask=cmask[indtok,:,:]; csector=csector[indtok,:,:]; cnameid=cnameid[indtok,:,:]
     cposdist=cposdist[indtok,:,:]; cangle=cangle[indtok,:,:]
-    cposdist[cposdist==9999]=-1
+    cposdist[cposdist==9999]=-1; cangle[cangle==9999]=-1
 
     print(" Selected dates with active cyclones only")
 
