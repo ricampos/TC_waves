@@ -43,6 +43,7 @@ matplotlib.rc('xtick', labelsize=sl); matplotlib.rc('ytick', labelsize=sl); matp
 ds = xr.open_dataset('CycloneMap.nc')
 ctime = ds.time.values; lat = ds['lat'].values; lon = ds['lon'].values
 cmap = ds['cmap'].values; csec = ds['csec'].values; cid = ds['cid'].values
+cdist = ds['ccdist'].values; cangle = ds['ccangle'].values
 ds.close(); del ds
 
 cnames = np.array(pd.read_csv('cyclone_names.txt', header=None).values).astype('str')
@@ -50,9 +51,11 @@ cnames = np.array(pd.read_csv('cyclone_names.txt', header=None).values).astype('
 csel = csel = ['FIONA','IAN','IDALIA','FRANKLIN','HELENE','MILTON']
 
 levels=np.array([-1,0,1,2])
-slevels=np.array([0,1,2,3,4,5])
+slevels=np.array([0.1,1,2,3,4,5])
 hlevels = np.linspace(0,11.2,113)
 wlevels = np.linspace(0,40,41)
+cdlevels=np.array(np.linspace(0,np.nanmax(cdist),100))
+calevels=np.append([0.0001,0.001],np.linspace(0.,360,361)[1::])
 
 for t in range(0,len(ctime)):
 
@@ -77,6 +80,8 @@ for t in range(0,len(ctime)):
             # cyclone map, sectors, and mask
             fcmap = cmap[t,:,:]
             fcsec = csec[t,:,:]
+            fcdist = cdist[t,:,:]
+            fcangle = cangle[t,:,:]
 
             mask = np.zeros(hs.shape, dtype=bool)
             mask[fcmap>0]=True
@@ -135,8 +140,9 @@ for t in range(0,len(ctime)):
             map.drawcoastlines(linewidth=0.25, zorder=3)
             map.drawcountries(linewidth=0.25, zorder=3)
             map.fillcontinents(color='grey', zorder=3)
-            map.drawlsmask(ocean_color='w',land_color='grey', zorder=1)     
-            map.contourf(xc,yc,fcsec,slevels,extend="max", vmin=0., cmap=plt.cm.jet, zorder=2)
+            map.drawlsmask(ocean_color='w',land_color='grey', zorder=1)
+            map.contourf(xc,yc,hs,hlevels,extend="max", vmin=0., cmap=plt.cm.jet,alpha=0.3, antialiased=True, zorder=2)
+            map.contourf(xc,yc,fcsec,slevels,extend="max", vmin=0.1, cmap=plt.cm.jet, zorder=2)
             map.contour(xc,yc,fcmap,levels,vmin=0.5, vmax=1.5, zorder=3,colors='k', linewidths=1)
             map.fillcontinents(color='silver', zorder=3)
             map.drawcoastlines(linewidth=0.8)
@@ -146,6 +152,46 @@ for t in range(0,len(ctime)):
             plt.title(cptime[0:8]+" "+str(int(cptime[9:11])).zfill(2)+"Z", fontsize=18)
             plt.tight_layout()
             savefig("CycloneMap_Sectors_"+cptime+".png", dpi=150, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
+
+            # Plot Coord (angle)
+            plt.figure(figsize=(10,10))
+            map = Basemap(projection='ortho',lat_0=15,lon_0=-80,area_thresh=1.0,resolution='l')
+            map.drawcoastlines(linewidth=0.25, zorder=3)
+            map.drawcountries(linewidth=0.25, zorder=3)
+            map.fillcontinents(color='grey', zorder=3)
+            map.drawlsmask(ocean_color='w',land_color='grey', zorder=1)     
+            map.contourf(xc,yc,hs,hlevels,extend="max", vmin=0., cmap=plt.cm.jet,alpha=0.3, antialiased=True, zorder=2)
+            map.contourf(xc,yc,fcangle,calevels,extend="max", vmin=0.01, vmax=360.1, cmap=plt.cm.jet, zorder=2)
+            map.contour(xc,yc,fcmap,levels,vmin=0.5, vmax=1.5, zorder=3,colors='k', linewidths=1)
+            map.fillcontinents(color='silver', zorder=3)
+            map.drawcoastlines(linewidth=0.8)
+            map.drawcountries(linewidth=0.5, linestyle='solid', color='k', antialiased=1, ax=None, zorder=4)
+            map.drawmeridians(np.arange(0,360,30), zorder=5)
+            map.drawparallels(np.arange(-90,90,30), zorder=5)
+            plt.title(cptime[0:8]+" "+str(int(cptime[9:11])).zfill(2)+"Z", fontsize=18)
+            plt.tight_layout()
+            savefig("CycloneMap_CoordAngle_"+cptime+".png", dpi=150, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
+            plt.close('all')
+
+            # Plot Coord (r)
+            plt.figure(figsize=(10,10))
+            map = Basemap(projection='ortho',lat_0=15,lon_0=-80,area_thresh=1.0,resolution='l')
+            map.drawcoastlines(linewidth=0.25, zorder=3)
+            map.drawcountries(linewidth=0.25, zorder=3)
+            map.fillcontinents(color='grey', zorder=3)
+            map.drawlsmask(ocean_color='w',land_color='grey', zorder=1)     
+            map.contourf(xc,yc,hs,hlevels,extend="max", vmin=0., cmap=plt.cm.jet,alpha=0.3, antialiased=True, zorder=2)
+            map.contourf(xc,yc,fcdist,cdlevels,extend="max", vmin=0., cmap=plt.cm.jet, zorder=2)
+            map.contour(xc,yc,fcmap,levels,vmin=0.5, vmax=1.5, zorder=3,colors='k', linewidths=1)
+            map.fillcontinents(color='silver', zorder=3)
+            map.drawcoastlines(linewidth=0.8)
+            map.drawcountries(linewidth=0.5, linestyle='solid', color='k', antialiased=1, ax=None, zorder=4)
+            map.drawmeridians(np.arange(0,360,30), zorder=5)
+            map.drawparallels(np.arange(-90,90,30), zorder=5)
+            plt.title(cptime[0:8]+" "+str(int(cptime[9:11])).zfill(2)+"Z", fontsize=18)
+            plt.tight_layout()
+            savefig("CycloneMap_CoordR_"+cptime+".png", dpi=150, facecolor='w', edgecolor='w',orientation='portrait', format='png',transparent=False, bbox_inches='tight', pad_inches=0.1)
             plt.close('all')
 
             print("Ok "+cptime)
