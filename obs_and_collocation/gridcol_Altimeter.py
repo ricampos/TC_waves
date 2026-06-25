@@ -76,8 +76,6 @@ fnetcdf="NETCDF4"
 
 if __name__ == "__main__":
 
-# 20827762
-
     # INPUTS 
     # power of initial array 10**pia (size) that will be used to allocate satellite data (faster than append)
     pia=10
@@ -118,7 +116,7 @@ if __name__ == "__main__":
     start = timeit.default_timer()
 
     # GridMask
-    f=nc.Dataset('gridInfo.nc')
+    f=nc.Dataset('gridInfo_TGPM.nc')
     latm=f.variables['latitude'][:]; lonm=f.variables['longitude'][:]
     maskm=f.variables['mask'][:,:]; depthm=f.variables['depth'][:,:]; dfc=f.variables['distcoast'][:,:]
     f.close(); del f
