@@ -240,7 +240,7 @@ def landcoast_exclude(wdic,gpath=None,mdepth=None,mdfc=None,mdist=None):
     """
 
     if gpath==None:
-       gpath='/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/gridInfo.nc'
+       gpath='/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/gridInfo_TGPM.nc'
 
     if mdepth==None:
         mdepth=20.
@@ -258,8 +258,8 @@ def landcoast_exclude(wdic,gpath=None,mdepth=None,mdfc=None,mdist=None):
 
     fhs = np.array(wdic['hs'][:])
     for i in range(0,len(wdic['time'])):
-        if np.isnan(wdic['hs'][i])==False:
-            if len(wdic['latitude'])>1:
+        if np.isnan(wdic['hs'][i])==False and np.isnan(wdic['latitude'][i])==False and np.isnan(wdic['longitude'][i])==False:
+            if len(wdic['latitude'][wdic['latitude']>-90])>1:
                 indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
                 indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
                 dist = float(haversine((wdic['latitude'][i], wdic['longitude'][i]), (glat[indlat], glon[indlon]), unit=Unit.KILOMETERS))
@@ -300,7 +300,7 @@ def model_compare(wdic,gpath=None,mdist=None):
     for i in range(0,len(wdic['time'])):
         if np.isnan(wdic['hs'][i])==False:
             indt = np.where( abs(gtime[:]-wdic['time'][i]) < 3600. )
-            if np.size(indt)>0:
+            if np.size(indt)>0 and np.isnan(wdic['hs'][i])==False and np.isnan(wdic['latitude'][i])==False and np.isnan(wdic['longitude'][i])==False:
                 if len(wdic['latitude'])>1:
                     indlat=np.min(np.where( np.abs(wdic['latitude'][i]-glat)==np.nanmin(np.abs(wdic['latitude'][i]-glat))))
                     indlon=np.min(np.where( np.abs(wdic['longitude'][i]-glon)==np.nanmin(np.abs(wdic['longitude'][i]-glon))))
@@ -312,7 +312,7 @@ def model_compare(wdic,gpath=None,mdist=None):
 
                 if dist<mdist:
                     fghs=float(ghs[np.nanmin(indt),indlat,indlon])
-                    if wdic['hs'][i]>fghs*1.3+1. or wdic['hs'][i]<fghs*0.75-0.8:
+                    if wdic['hs'][i]>fghs*1.32+1.2 or wdic['hs'][i]<fghs*0.73-1.0:
                         print(" QC model_compare - Cleaned data: index "+repr(i)+" Hs "+repr(wdic['hs'][i])+", model value "+repr(fghs)) 
                         fhs[i]=np.nan
 

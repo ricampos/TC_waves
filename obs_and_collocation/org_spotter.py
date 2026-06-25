@@ -43,15 +43,15 @@ def wproc(wdic,bname,wdt,buoyd):
     wdic['hs']=quality_control_wave.data_range(wdic,var='hs',vmin=0.3,vmax=20.)
     wdic['hs']=quality_control_wave.duplicates(wdic)
     wdic['hs']=quality_control_wave.rate_of_change(wdic)
-    wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='gridInfo_TGPM.nc',mdepth=80,mdfc=5) # mdepth=20,mdfc=1
+    wdic['hs']=quality_control_wave.landcoast_exclude(wdic,gpath='/home/ricardo/work/noaa/analysis/TC_Waves/2collocation/gridInfo_TGPM.nc',mdepth=25,mdfc=5)
     # wdic['hs']=quality_control_wave.model_compare(wdic,gpath=None,mdist=None)
     print(" OK - QC for "+bname)
 
     blat=[]; blon=[]; aindt=np.array([]).astype('int')
     bhs=[]; bwnd=[]; btp=[]; btm=[]
     btime=np.double([]); brt=np.double([])
-    abcmap=[]; abcid=[]; abcsec=[]
     agidlat=[]; agidlon=[]; abid=[]
+    abcmap=[]; abcsec=[]; abccdist=[]; abccangle=[]; abcid=[]
 
     ind=np.where(wdic['hs']>0.1)
     if np.size(ind)>0:
@@ -64,17 +64,17 @@ def wproc(wdic,bname,wdt,buoyd):
         if "wind_spd" in wdic:
             awnd=wdic['wind_spd'][ind]
         else:
-            awnd=np.zeros(len(ahs),'f')-999.999
+            awnd=np.zeros(len(ahs),'f')-999
 
         if "tp" in wdic:
             atp=wdic['tp'][ind]
         else:
-            atp=np.zeros(len(ahs),'f')-999.999
+            atp=np.zeros(len(ahs),'f')-999
 
         if "tm" in wdic:
             atm=wdic['tm'][ind]
         else:
-            atm=np.zeros(len(ahs),'f')-999.999
+            atm=np.zeros(len(ahs),'f')-999
 
         alat=wdic['latitude'][ind]; alon=wdic['longitude'][ind]
 
@@ -112,19 +112,25 @@ def wproc(wdic,bname,wdt,buoyd):
                     indlon = np.where( np.abs(lonc-alon[t]) == np.nanmin(np.abs(lonc-alon[t])) )[0][0]
                     if cmap[np.min(indc[0]),indlat,indlon]>0:
                         abcmap = np.append(abcmap,int(cmap[np.min(indc[0]),indlat,indlon]))
-                        abcid = np.append(abcid,int(cid[np.min(indc[0]),indlat,indlon]))
                         abcsec = np.append(abcsec,int(csec[np.min(indc[0]),indlat,indlon]))
+                        abccdist = np.append(abccdist,int(ccdist[np.min(indc[0]),indlat,indlon]))
+                        abccangle = np.append(abccangle,int(ccangle[np.min(indc[0]),indlat,indlon]))
+                        abcid = np.append(abcid,int(cid[np.min(indc[0]),indlat,indlon]))
                     else:
-                        abcmap = np.append(abcmap,0)
-                        abcid = np.append(abcid,0)
-                        abcsec = np.append(abcsec,0)
+                        abcmap = np.append(abcmap,-999)
+                        abcsec = np.append(abcsec,-999)
+                        abccdist = np.append(abccdist,-999)
+                        abccangle = np.append(abccangle,-999)
+                        abcid = np.append(abcid,-999)
 
                     del indlat,indlon
 
                 else:
-                    abcmap = np.append(abcmap,0)
-                    abcid = np.append(abcid,0)
-                    abcsec = np.append(abcsec,0)
+                    abcmap = np.append(abcmap,-999)
+                    abcsec = np.append(abcsec,-999)
+                    abccdist = np.append(abccdist,-999)
+                    abccangle = np.append(abccangle,-999)
+                    abcid = np.append(abcid,-999)
 
                 del indc
 
@@ -143,7 +149,7 @@ def wproc(wdic,bname,wdt,buoyd):
 
             print(bname+" done")
 
-    return btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec
+    return btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec,abccdist,abccangle
 
 
 if __name__ == "__main__":
@@ -154,12 +160,11 @@ if __name__ == "__main__":
     # Buoy data type
     buoyd="SPOTTER"
     # Data path
-    dpath="/data/spotter"
+    dpath="/home/ricardo/work/noaa/analysis/TC_Waves/data/spotter"
 
     # GridMask
     f=nc.Dataset('gridInfo_TGPM.nc')
     latm=f.variables['latitude'][:]; lonm=f.variables['longitude'][:]; lonm[lonm>180]=lonm[lonm>180]-360.
-    maskm=f.variables['mask'][:,:]; depthm=f.variables['depth'][:,:]; depthm=f.variables['depth'][:,:]
     f.close(); del f
 
     # Cyclone Info
@@ -168,14 +173,15 @@ if __name__ == "__main__":
     ctime = np.array(f.variables['time'][:]).astype('double')
     cmap = np.array(f.variables['cmap'][:,:,:]).astype('float')
     csec = np.array(f.variables['csec'][:,:,:]).astype('float')
+    ccdist = np.array(f.variables['ccdist'][:,:,:]).astype('float')
+    ccangle = np.array(f.variables['ccangle'][:,:,:]).astype('float')
     cid = np.array(f.variables['cid'][:,:,:]).astype('float')
     f.close(); del f
-    # cmap[cmap<0]=np.nan; cid[cid<0]=np.nan; csec[csec<0]=np.nan
 
     ftime=[]; frtime=[]; bid=[]
     lat=[]; lon=[]; gidlat=[]; gidlon=[] 
     hs=[]; tp=[]; tm=[]; wnd=[] 
-    bcmap=[]; bcid=[]; bcsec=[]
+    bcmap=[]; bcsec=[]; bccdist=[]; bccangle=[]; bcid=[]
 
     # Read buoys
     years=[2022,2023,2024]
@@ -203,7 +209,7 @@ if __name__ == "__main__":
                         print(" Cannot open "+fname)
                     else:
                         bname=fname.split('_')[-1].split('.nc')[0]
-                        btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec = wproc(wdic,bname,wdt,buoyd)
+                        btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec,abccdist,abccangle = wproc(wdic,bname,wdt,buoyd)
 
                         # Final arrays
                         if np.size(btime)>1:
@@ -212,8 +218,10 @@ if __name__ == "__main__":
                             gidlat=np.append(gidlat,agidlat); gidlon=np.append(gidlon,agidlon)
                             hs=np.append(hs,bhs); tp=np.append(tp,btp); tm=np.append(tm,btm); wnd=np.append(wnd,bwnd)
                             bcmap = np.append(bcmap,abcmap)
-                            abcid[abcid<0]=0.; abcid[np.isnan(abcid)==True]=0.; bcid = np.append(bcid,abcid)
-                            abcsec[abcsec<0]=0.; abcsec[np.isnan(abcsec)==True]=0.; bcsec = np.append(bcsec,abcsec)
+                            abcsec[abcsec<0]=-999; abcsec[np.isnan(abcsec)==True]=-999; bcsec = np.append(bcsec,abcsec)
+                            abccdist[abccdist<0]=-999; abccdist[np.isnan(abccdist)==True]=-999; bccdist = np.append(bccdist,abccdist)
+                            abccangle[abccdist<0]=-999; abccangle[abccangle<0]=-999; abccangle[np.isnan(abccangle)==True]=-999; bccangle = np.append(bccangle,abccangle)
+                            abcid[abcid<0]=-999; abcid[np.isnan(abcid)==True]=-999; bcid = np.append(bcid,abcid)
 
                     del fname                    
 
@@ -237,7 +245,7 @@ if __name__ == "__main__":
                     print(" Cannot open "+fname+" "+bnames[i])
                 else:
 
-                    btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec = wproc(wdic,bnames[i],wdt,buoyd)
+                    btime,brt,abid,blat,blon,agidlat,agidlon,bhs,btp,btm,bwnd,abcmap,abcid,abcsec,abccdist,abccangle = wproc(wdic,bnames[i],wdt,buoyd)
 
                     # Final arrays
                     if np.size(btime)>1:
@@ -246,8 +254,10 @@ if __name__ == "__main__":
                         gidlat=np.append(gidlat,agidlat); gidlon=np.append(gidlon,agidlon)
                         hs=np.append(hs,bhs); tp=np.append(tp,btp); tm=np.append(tm,btm); wnd=np.append(wnd,bwnd)
                         bcmap = np.append(bcmap,abcmap)
-                        abcid[abcid<0]=0.; abcid[np.isnan(abcid)==True]=0.; bcid = np.append(bcid,abcid)
-                        abcsec[abcsec<0]=0.; abcsec[np.isnan(abcsec)==True]=0.; bcsec = np.append(bcsec,abcsec)
+                        abcsec[abcsec<0]=-999; abcsec[np.isnan(abcsec)==True]=-999; bcsec = np.append(bcsec,abcsec)
+                        abccdist[abccdist<0]=-999; abccdist[np.isnan(abccdist)==True]=-999; bccdist = np.append(bccdist,abccdist)
+                        abccangle[abccdist<0]=-999; abccangle[abccangle<0]=-999; abccangle[np.isnan(abccangle)==True]=-999; bccangle = np.append(bccangle,abccangle)
+                        abcid[abcid<0]=-999; abcid[np.isnan(abcid)==True]=-999; bcid = np.append(bcid,abcid)
 
                     print(bnames[i]+" done")
 
@@ -255,18 +265,21 @@ if __name__ == "__main__":
 
             del bnames, fname
 
+    print(" Data processing complete. Saving the results ...")
 
     # Save results
     ind=np.where(hs>0.01)
     if np.size(ind)>0:
 
-        hs[np.isnan(hs)==True]=-999.999; wnd[np.isnan(wnd)==True]=-999.999
-        tp[np.isnan(tp)==True]=-999.999; tm[np.isnan(tm)==True]=-999.999
+        hs[np.isnan(hs)==True]=-999; wnd[np.isnan(wnd)==True]=-999
+        tp[np.isnan(tp)==True]=-999; tm[np.isnan(tm)==True]=-999
 
         hs=np.round(hs,4); tp=np.round(tp,4); tm=np.round(tm,4); wnd=np.round(wnd,4)
         lat=np.round(lat,5); lon=np.round(lon,5); # glat=np.round(glat,5); glon=np.round(glon,5)
         gidlat=np.array(gidlat).astype('int'); gidlon=np.array(gidlon).astype('int')
-        bcmap=np.array(bcmap).astype('int'); bcid=np.array(bcid).astype('int'); bcsec=np.array(bcsec).astype('int')
+        bcmap=np.array(bcmap).astype('int'); bcsec=np.array(bcsec).astype('int')
+        bccdist=np.array(bccdist).astype('int'); bccangle=np.array(bccangle).astype('int')
+        bcid=np.array(bcid).astype('int')
 
         # Save wdics 
         df = pd.DataFrame({
@@ -274,13 +287,13 @@ if __name__ == "__main__":
             'buoy_time': pd.to_datetime(ftime, unit='s').strftime('%Y%m%d%H%M'),
             'lat': lat,
             'lon': lon,
-            # 'glat': glat,
-            # 'glon': glon,
             'gidlat': gidlat,
             'gidlon': gidlon,
             'id': bid,
             'cmap': bcmap,
             'csec': bcsec,
+            'ccdist': bccdist,
+            'ccangle': bccangle,
             'cid': bcid,
             'hs': hs,
             'tm': tm,
