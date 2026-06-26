@@ -6,6 +6,7 @@ org_dbuoys.py
 
 VERSION AND LAST UPDATE:
  v1.0  09/23/2025
+ v1.1  06/22/2026
 
 PURPOSE:
  Data processing, quality control, and organizing of wave (drifting) buoys:
@@ -20,6 +21,7 @@ DEPENDENCIES:
 
 AUTHOR and DATE:
  08/28/2025: Ricardo M. Campos, first version.
+ 06/22/2026: Ricardo M. Campos, included more cyclone information.
 
 PERSON OF CONTACT:
  Ricardo M Campos: ricardo.campos@noaa.gov

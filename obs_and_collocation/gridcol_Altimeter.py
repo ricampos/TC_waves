@@ -8,6 +8,7 @@ VERSION AND LAST UPDATE:
  v1.0  04/04/2022
  v1.1  07/18/2022
  v1.2  05/21/2023
+ v1.3  06/22/2026
 
 PURPOSE:
  Script to take altimeter tracks and collocate into regular
@@ -54,8 +55,9 @@ AUTHOR and DATE:
  07/18/2022: Ricardo M. Campos, SENTINEL-3B included. Longitude standard checked.
  05/21/2023: Ricardo M. Campos, CFOSAT included. HsC-band removed. New dlim default
   obtained from https://doi.org/10.3390/rs15082203
- 10/30/2025: Adapted to collocate into a high-res grid using nearest method, and divided
-  into segment to allow running multiple processes.
+ 10/30/2025: Ricardo M. Campos, Adapted to collocate into a high-res grid using nearest method, 
+  and divided into segment to allow running multiple processes.
+ 06/22/2026: Ricardo M. Campos, included more cyclone information and added SWOT altimeter.
 
 PERSON OF CONTACT:
  Ricardo M Campos: ricardo.campos@noaa.gov
@@ -86,10 +88,10 @@ if __name__ == "__main__":
     # Directory where AODN altimeter data is saved, downloaded using wfetchsatellite_AODN_Altimeter.sh
     dirs='/work/noaa/marine/ricardo.campos/data/AODN/altimeter'
     # Water depth (m) and distance to the coast (km) - for altimeter
-    mdepth=80; mdfc=25
+    mdepth=30; mdfc=25
 
     # Date interval
-    datemin='2022010100'; datemax='2025010100'
+    datemin='2022010100'; datemax='2026010100'
 
     # Satellite missions available at AODN dataset, pick one as this code runs one satellite at a time!
     if len(sys.argv) <= 2 :
@@ -100,17 +102,15 @@ if __name__ == "__main__":
         nseg=int(sys.argv[2])
         seg=int(sys.argv[3])
 
-    sdname=np.array(['JASON3','JASON2','CRYOSAT2','JASON1','HY2','HY2B','SARAL','SENTINEL3A','ENVISAT','ERS1','ERS2','GEOSAT','GFO','TOPEX','SENTINEL3B','CFOSAT','SENTINEL6A'])
-    sname=np.array(['JASON-3','JASON-2','CRYOSAT-2','JASON-1','HY-2','HY-2B','SARAL','SENTINEL-3A','ENVISAT','ERS-1','ERS-2','GEOSAT','GFO','TOPEX','SENTINEL-3B','CFOSAT','SENTINEL-6A'])
-    # Ongoing sat missions:
-    # CFOSAT, SARAL, CRYOSAT2, HY2B, JASON3, SENTINEL3A, SENTINEL3B, SENTINEL6A
+    sdname=np.array(['JASON3','CRYOSAT2','HY2B','SARAL','SENTINEL3A','SENTINEL3B','CFOSAT','SENTINEL6A','SWOT'])
+    sname=np.array(['JASON-3','CRYOSAT-2','HY-2B','SARAL','SENTINEL-3A','SENTINEL-3B','CFOSAT','SENTINEL-6A','SWOT'])
 
     # Altimeter Quality Control parameters
     max_swh_rms = 1.5  # Max RMS of the band significant wave height
     max_sig0_rms = 0.8 # Max RMS of the backscatter coefficient
     max_swh_qc = 2.0 # Max SWH Ku band quality control
     hsmax=20.; wspmax=90.
-    min_swh_numval = np.array([17,17,17,17,17,17,17,17,17,17,17,-9999,3,7,17,-9999,17])
+    min_swh_numval = np.array([17,17,17,17,17,17,-np.inf,17,17])
     # ---------
 
     start = timeit.default_timer()
@@ -122,10 +122,12 @@ if __name__ == "__main__":
     f.close(); del f
     # Cyclone Info
     f = nc.Dataset('CycloneMap.nc')
-    latc=f.variables['lat'][:]; lonc=f.variables['lon'][:]; lonc[lonc<=0]=lonc[lonc<=0]+360.
+    latc=f.variables['lat'][:]; lonc=f.variables['lon'][:]; lonc[lonc>180]=lonc[lonc>180]-360.
     ctime = np.array(f.variables['time'][:]).astype('double')
     cmap = np.array(f.variables['cmap'][:,:,:]).astype('float')
     csec = np.array(f.variables['csec'][:,:,:]).astype('float')
+    ccdist = np.array(f.variables['ccdist'][:,:,:]).astype('float')
+    ccangle = np.array(f.variables['ccangle'][:,:,:]).astype('float')
     cid = np.array(f.variables['cid'][:,:,:]).astype('float')
     f.close(); del f
 
@@ -226,7 +228,7 @@ if __name__ == "__main__":
         ftime=[]; frtime=[]
         lat=[]; lon=[]; gidlat=[]; gidlon=[]
         hs=[]; wnd=[]
-        bcmap=[]; bcid=[]; bcsec=[]
+        bcmap=[]; bcsec=[]; bccdist=[]; bccangle=[]; bcid=[]
 
         lines_to_read = len(ast) // nseg
         if seg<nseg:
@@ -266,19 +268,25 @@ if __name__ == "__main__":
                     indlonc = np.where( np.abs(lonc-aslon[t]) == np.nanmin(np.abs(lonc-aslon[t])) )[0][0]
                     if cmap[np.min(indc[0]),indlatc,indlonc]>0:
                         bcmap = np.append(bcmap,int(cmap[np.min(indc[0]),indlatc,indlonc]))
-                        bcid = np.append(bcid,int(cid[np.min(indc[0]),indlatc,indlonc]))
                         bcsec = np.append(bcsec,int(csec[np.min(indc[0]),indlatc,indlonc]))
+                        bccdist = np.append(bccdist,int(ccdist[np.min(indc[0]),indlatc,indlonc]))
+                        bccangle = np.append(bccangle,int(ccangle[np.min(indc[0]),indlatc,indlonc]))
+                        bcid = np.append(bcid,int(cid[np.min(indc[0]),indlatc,indlonc]))
                     else:
-                        bcmap = np.append(bcmap,0)
-                        bcid = np.append(bcid,0)
-                        bcsec = np.append(bcsec,0)
+                        bcmap = np.append(bcmap,-999)
+                        bcsec = np.append(bcsec,-999)
+                        bccdist = np.append(bccdist,-999)
+                        bccangle = np.append(bccangle,-999)
+                        bcid = np.append(bcid,-999)
 
                     del indlatc, indlonc
 
                 else:
-                    bcmap = np.append(bcmap,0)
-                    bcid = np.append(bcid,0)
-                    bcsec = np.append(bcsec,0)
+                    bcmap = np.append(bcmap,-999)
+                    bcsec = np.append(bcsec,-999)
+                    bccdist = np.append(bccdist,-999)
+                    bccangle = np.append(bccangle,-999)
+                    bcid = np.append(bcid,-999)
 
                 del indc
 
@@ -291,14 +299,18 @@ if __name__ == "__main__":
 
         bid=np.full(len(hs), sdname[s], dtype=f'<U{len(sdname[s])}')
 
-        hs[np.isnan(hs)==True]=-999.999; wnd[np.isnan(wnd)==True]=-999.999
-        tm = np.full(len(hs), -999.999, dtype='float')
-        tp = np.full(len(hs), -999.999, dtype='float')
+        hs[np.isnan(hs)==True]=-999; wnd[np.isnan(wnd)==True]=-999
+        tm = np.full(len(hs), -999, dtype='float')
+        tp = np.full(len(hs), -999, dtype='float')
 
         hs=np.round(hs,4); tp=np.round(tp,4); tm=np.round(tm,4); wnd=np.round(wnd,4)
         lat=np.round(lat,5); lon=np.round(lon,5)
         gidlat=np.array(gidlat).astype('int'); gidlon=np.array(gidlon).astype('int')
-        bcmap=np.array(bcmap).astype('int'); bcid=np.array(bcid).astype('int'); bcsec=np.array(bcsec).astype('int')
+        bcmap=np.array(bcmap).astype('int'); 
+        bcsec[bcsec<0]=-999; bcsec[np.isnan(bcsec)==True]=-999; bcsec=np.array(bcsec).astype('int')
+        bccdist[bccdist<0]=-999; bccdist[np.isnan(bccdist)==True]=-999; bccdist = np.array(bccdist).astype('int')
+        bccangle[bccdist<0]=-999; bccangle[bccangle<0]=-999; bccangle[np.isnan(bccangle)==True]=-999; bccangle = np.array(bccangle).astype('int')
+        bcid[bcid<0]=-999; bcid[np.isnan(bcid)==True]=-999; bcid=np.array(bcid).astype('int')
 
         # Save wdics 
         df = pd.DataFrame({
@@ -311,6 +323,8 @@ if __name__ == "__main__":
             'id': bid,
             'cmap': bcmap,
             'csec': bcsec,
+            'ccdist': bccdist,
+            'ccangle': bccangle,
             'cid': bcid,
             'hs': hs,
             'tm': tm,

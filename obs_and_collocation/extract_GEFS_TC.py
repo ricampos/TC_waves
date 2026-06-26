@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     gres = np.zeros((len(ot),3+len(gvarn)),dtype=object)-999.
 
-    for y in [2022,2023,2024]:
+    for y in [2022,2023,2024,2025]:
         for m in [6,7,8,9,10,11]:
             for d in range(1,calendar.monthrange(y, m)[1]+1):
                 for c in [0,12]:
