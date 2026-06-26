@@ -6,7 +6,7 @@ DIRSCRIPTS="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation
 cd ${DIRSCRIPTS}
 
 NSEG=10
-for SAT in 0 2 5 6 7 14 15 16; do
+for SAT in `seq 0 8`; do
   for SEG in `seq 1 10`; do
     export NSEG=${NSEG}
     export SAT=${SAT}

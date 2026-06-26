@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # Read PModel
     ft=[]; flat=[]; flon=[]; fid=[]; fcmap=[]; fcsec=[]; fcid=[]; ohs=[]; otm=[]; otp=[]; ownd=[]
     mhs=[]; mtp=[]; muwnd=[]; mvwnd=[]
-    for y in [2022,2023,2024]:
+    for y in [2022,2023,2024,2025]:
         for m in [6,7,8,9,10,11]:
             f = nc.Dataset("Pmodel_reanalysis_"+str(y)+str(m).zfill(2)+"_Default.nc")
             at = f.variables['time'][:]

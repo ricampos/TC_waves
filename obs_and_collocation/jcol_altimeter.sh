@@ -9,7 +9,7 @@
 
 # This job script run the python code col_altimeter.py on Orion
 #
-# DIRJOUT="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/CDIP"
+# DIRJOUT="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/ALTIMETER"
 # export NSEG=10
 # export SEG=1
 # export SAT=0
@@ -20,8 +20,7 @@ echo " Starting at "$(date +"%T")
 ulimit -s unlimited
 ulimit -c 0
 
-DIRSCRIPTS="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/CDIP"
-DIRO="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/CDIP"
+DIRSCRIPTS="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/2collocation/ALTIMETER"
 
 export SAT=${SAT}
 export NSEG=${NSEG}
@@ -38,7 +37,7 @@ echo "  "
 # work dir
 cd ${DIRSCRIPTS}
 
- python3 ${DIRSCRIPTS}/col_altimeter.py ${SAT} ${NSEG} ${SEG}
+ python3 ${DIRSCRIPTS}/gridcol_Altimeter.py ${SAT} ${NSEG} ${SEG}
  wait $!
 
 echo " Complete col_altimeter.py ${SAT} ${SEG} ${NSEG} at  "$(date +"%T")
