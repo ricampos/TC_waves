@@ -14,14 +14,14 @@ if __name__ == "__main__":
     pmrun="Default"
 
     # Read Obs
-    df = pd.read_csv('Data_TC.txt', sep='\t')
-    ot = np.array(df['time']).astype('str')
-    ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = np.array(ot.view('int64') // 1_000_000_000).astype('double')
+    df = pd.read_csv('Data_Cyclones.txt', sep='\t')
+    bt = np.array(df['obs_time']).astype('str')
+    ot = np.array(df['time']).astype('str'); ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = np.array(ot.view('int64') // 1_000_000_000).astype('double')
     gidlat = np.array(df['gidlat']); gidlon = np.array(df['gidlon'])
 
     # Read PModel
-    ft=[]; flat=[]; flon=[]; fid=[]; fcmap=[]; fcsec=[]; fcid=[]; ohs=[]; otm=[]; otp=[]; ownd=[]
-    mhs=[]; mtp=[]; muwnd=[]; mvwnd=[]
+    fbt=[]; ft=[]; flat=[]; flon=[]; fid=[]; fcmap=[]; fcsec=[]; fccdist=[]; fccangle=[]; fcid=[]
+    ohs=[]; otm=[]; otp=[]; ownd=[]; mhs=[]; mtp=[]; muwnd=[]; mvwnd=[]
     for y in [2022,2023,2024,2025]:
         for m in [6,7,8,9,10,11]:
             f = nc.Dataset("Pmodel_reanalysis_"+str(y)+str(m).zfill(2)+"_Default.nc")
@@ -42,9 +42,10 @@ if __name__ == "__main__":
                     del indt
 
                     # Allocate and keep observation data
-                    ft=np.append(ft,ot[i]); fid=np.append(fid,df['id'][i])
+                    fbt=np.append(fbt,bt[i]); ft=np.append(ft,ot[i]); fid=np.append(fid,df['id'][i])
                     flat=np.append(flat,df['lat'][i]); flon=np.append(flon,df['lon'][i])
-                    fcmap=np.append(fcmap,df['cmap'][i]); fcsec=np.append(fcsec,df['csec'][i]); fcid=np.append(fcid,df['cid'][i])
+                    fcmap=np.append(fcmap,df['cmap'][i]); fcsec=np.append(fcsec,df['csec'][i])
+                    fccdist=np.append(fccdist,df['ccdist'][i]); fccangle=np.append(fccangle,df['ccangle'][i]); fcid=np.append(fcid,df['cid'][i])
                     ohs=np.append(ohs,df['hs'][i]); otm=np.append(otm,df['tm'][i]); otp=np.append(otp,df['tp'][i]); ownd=np.append(ownd,df['wnd'][i])
 
             # Apply index to retrieve PModel data, for observation points (time and location)
@@ -64,11 +65,14 @@ if __name__ == "__main__":
     # Save results
     df = pd.DataFrame({
         'time': pd.to_datetime(ft[ind], unit='s').strftime('%Y%m%d%H%M'),
+        'obs_time': np.round(np.array(fbt[ind]).astype('float')).astype('int'),
         'lat': np.round(flat[ind],4),
         'lon': np.round(flon[ind],4),
         'id': fid[ind],
         'cmap': np.array(fcmap[ind]).astype('int'),
         'csec': np.array(fcsec[ind]).astype('int'),
+        'ccdist': np.array(fccdist[ind]).astype('int'),
+        'ccangle': np.array(fccangle[ind]).astype('int'),
         'cid': np.array(fcid[ind]).astype('int'),
         'obs_hs': np.round(ohs[ind],3),
         'obs_tm': np.round(otm[ind],3),

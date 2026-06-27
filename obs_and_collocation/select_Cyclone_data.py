@@ -24,7 +24,7 @@ if filtered_data:
     combined_df = pd.concat(filtered_data, ignore_index=True)
     
     # Save to Data_TC.txt
-    combined_df.to_csv('Data_TC.txt', sep='\t', index=False)
+    combined_df.to_csv('Data_Cyclones.txt', sep='\t', index=False)
     print(f"\nCombined dataset saved as Data_TC.txt with {len(combined_df)} total rows")
 else:
     print("No matching data found")

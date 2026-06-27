@@ -35,7 +35,7 @@ if __name__ == "__main__":
     start = timeit.default_timer()
 
     # Land/sea mask, water depth and distance to the coast.
-    f=nc.Dataset('gridInfo.nc')
+    f=nc.Dataset('gridInfo_TGPM.nc')
     latp=f.variables['latitude'][:]; mres=np.diff(latp).mean()
     lonp=f.variables['longitude'][:]; # lonp[lonp>180]=lonp[lonp>180]-360.
     mask=f.variables['mask'][:]
