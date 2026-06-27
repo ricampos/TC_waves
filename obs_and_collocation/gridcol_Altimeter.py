@@ -110,7 +110,7 @@ if __name__ == "__main__":
     max_sig0_rms = 0.8 # Max RMS of the backscatter coefficient
     max_swh_qc = 2.0 # Max SWH Ku band quality control
     hsmax=20.; wspmax=90.
-    min_swh_numval = np.array([17,17,17,17,17,17,-np.inf,17,17])
+    min_swh_numval = np.array([17,17,17,17,17,17,-9999,17,17])
     # ---------
 
     start = timeit.default_timer()
@@ -122,7 +122,9 @@ if __name__ == "__main__":
     f.close(); del f
     # Cyclone Info
     f = nc.Dataset('CycloneMap.nc')
-    latc=f.variables['lat'][:]; lonc=f.variables['lon'][:]; lonc[lonc>180]=lonc[lonc>180]-360.
+    latc=f.variables['lat'][:]; lonc=f.variables['lon'][:]
+    # lonc[lonc>180]=lonc[lonc>180]-360.
+    lonc[lonc<=0]=lonc[lonc<=0]+360.
     ctime = np.array(f.variables['time'][:]).astype('double')
     cmap = np.array(f.variables['cmap'][:,:,:]).astype('float')
     csec = np.array(f.variables['csec'][:,:,:]).astype('float')
@@ -165,7 +167,7 @@ if __name__ == "__main__":
                 st=np.double(fu.variables['TIME'][:])
                 if np.size(st)>10:
                     slat=fu.variables['LATITUDE'][:]
-                    slon=fu.variables['LONGITUDE'][:]
+                    slon=fu.variables['LONGITUDE'][:]; slon[slon<=0]=slon[slon<=0]+360.
                     wndcal=fu.variables['WSPD_CAL'][:]
                     try: 
                         hskcal=fu.variables['SWH_KU_CAL'][:]
