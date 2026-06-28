@@ -11,7 +11,13 @@ filtered_data = []
 for file in files:
     print(f"Processing {file}...")
     df = pd.read_csv(file, sep='\t')
-    
+
+    # Rename either time column to 'obs_time'
+    df = df.rename(columns={
+        'buoy_time': 'obs_time', 
+        'altimeter_time': 'obs_time'
+    })
+
     # Filter for cmap > 0 and csec > 0
     filtered = df[(df['cmap'] > 0) & (df['csec'] > 0)]
     
@@ -25,7 +31,7 @@ if filtered_data:
     
     # Save to Data_TC.txt
     combined_df.to_csv('Data_Cyclones.txt', sep='\t', index=False)
-    print(f"\nCombined dataset saved as Data_TC.txt with {len(combined_df)} total rows")
+    print(f"\nCombined dataset saved as Data_Cyclones.txt with {len(combined_df)} total rows")
 else:
     print("No matching data found")
 

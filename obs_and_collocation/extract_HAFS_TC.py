@@ -24,9 +24,9 @@ if __name__ == "__main__":
 
     # Read Obs
     df = pd.read_csv('Data_Obs_PModel_Default.txt', sep='\t')
-    ot = np.array(df['time']).astype('str')
+    ot = np.array(df['obs_time'].values[:]).astype('str')
     ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = ot.astype("int64") // 1_000_000_000
-    lat = np.array(df['lat']); lon = np.array(df['lon']); lon[lon<0]=lon[lon<0]+360.
+    lat = np.array(df['lat'].values[:]); lon = np.array(df['lon'].values[:]); lon[lon<0]=lon[lon<0]+360.
 
     hvarn = np.array(['UGRD_surface','VGRD_surface','HTSGW_surface','PERPW_surface','MWSPER_surface','DIRPW_surface','SWELL_1insequence','SWELL_2insequence','SWELL_3insequence','SWPER_1insequence','SWPER_2insequence','SWPER_3insequence',
         'SWDIR_1insequence','SWDIR_2insequence','SWDIR_3insequence','WVHGT_surface','WVPER_surface','WWSDIR_surface'])
@@ -51,14 +51,23 @@ if __name__ == "__main__":
                     hres[ind[j],1] = float(hlat[indlat])
                     hres[ind[j],2] = float(hlon[indlon])
 
-                    for k in range(0,len(hvarn)):
-                        haux = float(f.variables[hvarn[k]][i,indlat,indlon])
-                        if f.variables[hvarn[k]][i,indlat,indlon] > -999.:
-                            hres[ind[j],3+k] = haux
-                        else:
-                            hres[ind[j],3+k] = float(-999.)
-
-                        del haux
+                    for k in range(len(hvarn)):
+                        try:
+                            haux = float(f.variables[hvarn[k]][i, indlat, indlon])
+                            
+                            if haux > -999.0:
+                                hres[ind[j], 3 + k] = haux
+                            else:
+                                hres[ind[j], 3 + k] = -999.0
+                                
+                        except Exception as e:
+                            if "HDF error" in str(e):
+                                print(f"Warning: Skipping corrupted variable '{hvarn[k]}' at index {i}")
+                            else:
+                                print(f"Warning: Skipping variable '{hvarn[k]}' due to unexpected error: {e}")
+                                
+                            hres[ind[j], 3 + k] = -999.0
+                            continue
 
                     del indlat,indlon
 
