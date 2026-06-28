@@ -15,73 +15,68 @@ if __name__ == "__main__":
 
     # Read Obs
     df = pd.read_csv('Data_Cyclones.txt', sep='\t')
-    bt = np.array(df['obs_time']).astype('str')
-    ot = np.array(df['time']).astype('str'); ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = np.array(ot.view('int64') // 1_000_000_000).astype('double')
-    gidlat = np.array(df['gidlat']); gidlon = np.array(df['gidlon'])
+    ot = np.array(df['time'].values[:]).astype('str'); ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = np.array(ot.view('int64') // 1_000_000_000).astype('double')
+    flat = np.array(df['lat'].values[:]); flon = np.array(df['lon'].values[:])
+    gidlat = np.array(df['gidlat'].values[:]); gidlon = np.array(df['gidlon'].values[:])
+    # final arrays
+    ft=np.array(df['time'].values[:]).astype('str'); fbt = np.array(df['obs_time'].values[:]).astype('str')
+    fid=df['id'].values[:]; fcid=df['cid'].values[:]
+    fcmap=df['cmap'].values[:]; fcsec=df['csec'].values[:]; 
+    fccdist=df['ccdist'].values[:]; fccangle=df['ccangle'].values[:]
+    # flat=np.zeros(len(ot),'float')-999; flon=np.zeros(len(ot),'float')-999
+    # obs arrays
+    ohs=df['hs'].values[:]; otm=df['tm'].values[:]; otp=df['tp'].values[:]; ownd=df['wnd'].values[:]
 
-    # Read PModel
-    fbt=[]; ft=[]; flat=[]; flon=[]; fid=[]; fcmap=[]; fcsec=[]; fccdist=[]; fccangle=[]; fcid=[]
-    ohs=[]; otm=[]; otp=[]; ownd=[]; mhs=[]; mtp=[]; muwnd=[]; mvwnd=[]
+    # PModel arrays
+    mhs=np.zeros(len(ot),'float')-999.; mtp=np.zeros(len(ot),'float')-999.; muwnd=np.zeros(len(ot),'float')-999.; mvwnd=np.zeros(len(ot),'float')-999.
+    # Read PModel and allocate data
     for y in [2022,2023,2024,2025]:
         for m in [6,7,8,9,10,11]:
             f = nc.Dataset("Pmodel_reanalysis_"+str(y)+str(m).zfill(2)+"_Default.nc")
+            # latm = f.variables['lat'][:]; lonm = f.variables['lon'][:]
             at = f.variables['time'][:]
-            ahs = f.variables['hs'][:,:,:]
-            atp = f.variables['tp'][:,:,:]
-            auwnd = f.variables['uwnd'][:,:,:]
-            avwnd = f.variables['vwnd'][:,:,:]
-            # hs = ds.hs.load()
-            idt=[];ilat=[];ilon=[]
+            ahs = f.variables['hs'][:,:,:]; atp = f.variables['tp'][:,:,:]
+            auwnd = f.variables['uwnd'][:,:,:]; avwnd = f.variables['vwnd'][:,:,:]
             for i in range(0,len(ot)):
                 if np.min(np.abs( ot[i] - at )) < 1800.:
                     # Index array of PModel data
                     indt = np.min(np.where( np.abs( ot[i] - at ) == np.min(np.abs( ot[i] - at )) )[0])
-                    idt=np.append(idt,indt)
-                    ilat=np.append(ilat,gidlat[i])
-                    ilon=np.append(ilon,gidlon[i])
+                    # Allocate model data
+                    mhs[i] = float(ahs[indt,gidlat[i],gidlon[i]])
+                    mtp[i] = float(atp[indt,gidlat[i],gidlon[i]])
+                    muwnd[i] = float(auwnd[indt,gidlat[i],gidlon[i]])
+                    mvwnd[i] = float(avwnd[indt,gidlat[i],gidlon[i]])
+                    # flat[i] = float(latm[gidlat[i]]); flon[i] = float(lonm[gidlon[i]])
                     del indt
 
-                    # Allocate and keep observation data
-                    fbt=np.append(fbt,bt[i]); ft=np.append(ft,ot[i]); fid=np.append(fid,df['id'][i])
-                    flat=np.append(flat,df['lat'][i]); flon=np.append(flon,df['lon'][i])
-                    fcmap=np.append(fcmap,df['cmap'][i]); fcsec=np.append(fcsec,df['csec'][i])
-                    fccdist=np.append(fccdist,df['ccdist'][i]); fccangle=np.append(fccangle,df['ccangle'][i]); fcid=np.append(fcid,df['cid'][i])
-                    ohs=np.append(ohs,df['hs'][i]); otm=np.append(otm,df['tm'][i]); otp=np.append(otp,df['tp'][i]); ownd=np.append(ownd,df['wnd'][i])
-
-            # Apply index to retrieve PModel data, for observation points (time and location)
-            idt=np.array(idt).astype('int')
-            ilat=np.array(ilat).astype('int')
-            ilon=np.array(ilon).astype('int')
-
-            mhs = np.append(mhs,ahs[idt,ilat,ilon]); mtp = np.append(mtp,atp[idt,ilat,ilon])
-            muwnd = np.append(muwnd,auwnd[idt,ilat,ilon]); mvwnd = np.append(mvwnd,avwnd[idt,ilat,ilon])
-
             f.close(); del f
-            del idt,ilat,ilon,at,ahs,atp,auwnd,avwnd
+            del at,ahs,atp,auwnd,avwnd # latm,lonm
             print(" Ok "+repr(y)+str(m).zfill(2))
 
-    ind=np.where( (mhs>0.2) & (ohs>0.2) )[0]
+    mhs[np.isnan(mhs)==True]=-999.; mtp[np.isnan(mtp)==True]=-999.
+    muwnd[mhs<0.]=-999.; mvwnd[mhs<0.]=-999.;
+    muwnd[np.isnan(muwnd)==True]=-999.; mvwnd[np.isnan(mvwnd)==True]=-999.
 
     # Save results
     df = pd.DataFrame({
-        'time': pd.to_datetime(ft[ind], unit='s').strftime('%Y%m%d%H%M'),
-        'obs_time': np.round(np.array(fbt[ind]).astype('float')).astype('int'),
-        'lat': np.round(flat[ind],4),
-        'lon': np.round(flon[ind],4),
-        'id': fid[ind],
-        'cmap': np.array(fcmap[ind]).astype('int'),
-        'csec': np.array(fcsec[ind]).astype('int'),
-        'ccdist': np.array(fccdist[ind]).astype('int'),
-        'ccangle': np.array(fccangle[ind]).astype('int'),
-        'cid': np.array(fcid[ind]).astype('int'),
-        'obs_hs': np.round(ohs[ind],3),
-        'obs_tm': np.round(otm[ind],3),
-        'obs_tp': np.round(otp[ind],3),
-        'obs_wnd': np.round(ownd[ind],3),
-        'pm_hs': np.round(mhs[ind],3),
-        'pm_tp': np.round(mtp[ind],3),
-        'pm_uwnd': np.round(muwnd[ind],3),
-        'pm_vwnd': np.round(mvwnd[ind],3),
+        'time': ft,
+        'obs_time': fbt,
+        'lat': np.round(flat,4),
+        'lon': np.round(flon,4),
+        'id': fid,
+        'cmap': fcmap,
+        'csec': fcsec,
+        'ccdist': fccdist,
+        'ccangle': fccangle,
+        'cid': fcid,
+        'obs_hs': np.round(ohs,3),
+        'obs_tm': np.round(otm,3),
+        'obs_tp': np.round(otp,3),
+        'obs_wnd': np.round(ownd,3),
+        'pm_hs': np.round(mhs,3),
+        'pm_tp': np.round(mtp,3),
+        'pm_uwnd': np.round(muwnd,3),
+        'pm_vwnd': np.round(mvwnd,3),
     })
     df.to_csv("Data_Obs_PModel_"+pmrun+".txt", sep='\t', index=False, header=True)
 

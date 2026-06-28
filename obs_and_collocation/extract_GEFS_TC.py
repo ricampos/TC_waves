@@ -24,9 +24,9 @@ if __name__ == "__main__":
 
     # Read Obs
     df = pd.read_csv('Data_Obs_PModel_Default.txt', sep='\t')
-    ot = np.array(df['time']).astype('str')
+    ot = np.array(df['obs_time'].values[:]).astype('str')
     ot = pd.to_datetime(ot, format='%Y%m%d%H%M'); ot = ot.astype("int64") // 1_000_000_000
-    lat = np.array(df['lat']); lon = np.array(df['lon']); lon[lon<0]=lon[lon<0]+360.
+    lat = np.array(df['lat'].values[:]); lon = np.array(df['lon'].values[:]); lon[lon<0]=lon[lon<0]+360.
 
     # GEFSv12 sample
     f = nc.Dataset(gpath+"/gefs.wave.2023113012.23.global.0p25.nc")
