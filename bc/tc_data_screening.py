@@ -7,12 +7,7 @@
 
 import numpy as np
 import pandas as pd
-import os
-import netCDF4 as nc
 import xarray as xr
-import time
-from calendar import timegm
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy import stats
 import mvalstats
 import pvalstats
@@ -68,7 +63,7 @@ def scdensityplot(obs,model,vmin,vmax,maxdiff,lobs,lmodel,nlabel):
 
 if __name__ == "__main__":
 
-    # Read Obs
+    # Read Obs and Model data
     dirdata="/home/ricardo/work/noaa/analysis/TC_Waves/4postproc/data/"
 
     # HAFS
