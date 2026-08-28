@@ -127,7 +127,7 @@ def scdensityplot(obs,model,vmin,vmax,maxdiff,lobs,lmodel,nlabel):
 
 if __name__ == "__main__":
 
-    # Read Obs
+    # Read Obs and Model data
     dirdata="/home/ricardo/work/noaa/analysis/TC_Waves/4postproc/data/"
     # Headers
     hd = 'mean, variance, skewness, kurtosis, min, max, percentile80, percentile90, percentile95, percentile99, percentile99.9'
