@@ -3,7 +3,7 @@
 
 """
 Build dataset for ML modeling
-Total of 129 variables with ~32k matchups for training, distributed over 4 years and 84 TCs.
+Total of 129 variables with 45848 matchups for training, distributed over 4 years and 115 TCs.
 """
 
 import numpy as np
@@ -37,19 +37,19 @@ def read_ibtracs(fname):
     iR34_NW = np.array(dfibtr['USA_R34_NW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR34_NW[np.isnan(iR34_NW)==True]=0.
     iR34_SW = np.array(dfibtr['USA_R34_SW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR34_SW[np.isnan(iR34_SW)==True]=0.
     iR34_SE = np.array(dfibtr['USA_R34_SE'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR34_SE[np.isnan(iR34_SE)==True]=0.
-    iR34 = np.mean(np.array([iR34_NE,iR34_NW,iR34_SW,iR34_SE]),axis=0)
+    iR34 = np.nanmean(np.array([iR34_NE,iR34_NW,iR34_SW,iR34_SE]),axis=0)
 
     iR50_NE = np.array(dfibtr['USA_R50_NE'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR50_NE[np.isnan(iR50_NE)==True]=0.
     iR50_NW = np.array(dfibtr['USA_R50_NW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR50_NW[np.isnan(iR50_NW)==True]=0.
     iR50_SW = np.array(dfibtr['USA_R50_SW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR50_SW[np.isnan(iR50_SW)==True]=0.
     iR50_SE = np.array(dfibtr['USA_R50_SE'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR50_SE[np.isnan(iR50_SE)==True]=0.
-    iR50 = np.mean(np.array([iR50_NE,iR50_NW,iR50_SW,iR50_SE]),axis=0)
+    iR50 = np.nanmean(np.array([iR50_NE,iR50_NW,iR50_SW,iR50_SE]),axis=0)
 
     iR64_NE = np.array(dfibtr['USA_R64_NE'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR64_NE[np.isnan(iR64_NE)==True]=0.
     iR64_NW = np.array(dfibtr['USA_R64_NW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR64_NW[np.isnan(iR64_NW)==True]=0.
     iR64_SW = np.array(dfibtr['USA_R64_SW'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR64_SW[np.isnan(iR64_SW)==True]=0.
     iR64_SE = np.array(dfibtr['USA_R64_SE'].replace(' ', np.nan).values[:,0]).astype('float')*1852.; iR64_SE[np.isnan(iR64_SE)==True]=0.
-    iR64 = np.mean(np.array([iR64_NE,iR64_NW,iR64_SW,iR64_SE]),axis=0)
+    iR64 = np.nanmean(np.array([iR64_NE,iR64_NW,iR64_SW,iR64_SE]),axis=0)
 
     print('read_ibtracs: Ibtracks ok'); del dfibtr
     ind=np.where((iname!="UNNAMED") & (inat=='TS'))
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     cid = np.array(df['cid'])
 
     # Select quality data, obs and models. Exclude some platforms
-    ind = np.where( (ohs>0.2) & (ghs_em>0.2) & (mhs>0.2) & (hhs>0.2) & (cmap==5) &
+    ind = np.where( (ohs>0.2) & (ghs_em>0.2) & (mhs>0.2) & (cmap==5) &
         (np.char.startswith(oid, 'DWSD')!=True) &
         (np.char.startswith(oid, 'MICROSWIFT')!=True) &
         (np.char.startswith(oid, 'WSRA')!=True) &
