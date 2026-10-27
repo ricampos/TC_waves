@@ -89,9 +89,9 @@ if __name__ == "__main__":
 
     # HAFS
     dh = pd.read_csv(dirdata+"Data_HAFS_fromObs.txt", sep='\t')
-    hhs = np.array(dh['HTSGW_surface']); hhs[hhs<0.]=np.nan
+    hhs = np.array(dh['HTSGW_surface']); hhs[hhs<0.]=np.nan; hhs[hhs>25.]=np.nan
     hwnd = np.sqrt( np.array(dh['UGRD_surface'])**2 + np.array(dh['VGRD_surface'])**2 )
-    hwnd[hwnd<0.]=np.nan; hwnd[hwnd>100.]=np.nan
+    hwnd[hwnd<0.]=np.nan; hwnd[hwnd>120.]=np.nan
     del dh
 
     # GEFS
@@ -107,8 +107,8 @@ if __name__ == "__main__":
     ghs_c = np.copy(ghs[0,:]); ghs_em = np.nanmean(ghs,axis=0)
     gwnd_c = np.copy(gwnd[0,:]); gwnd_em = np.nanmean(gwnd,axis=0)
     ghs_c[ghs_c<0.]=np.nan; ghs_em[ghs_em<0.]=np.nan
-    gwnd_c[gwnd_c<0.]=np.nan; gwnd_c[gwnd_c>100.]=np.nan;
-    gwnd_em[gwnd_em<0.]=np.nan; gwnd_em[gwnd_em>100.]=np.nan
+    gwnd_c[gwnd_c<0.]=np.nan; gwnd_c[gwnd_c>120.]=np.nan;
+    gwnd_em[gwnd_em<0.]=np.nan; gwnd_em[gwnd_em>120.]=np.nan
     del ghs, gwnd
 
     # PModel
@@ -140,6 +140,9 @@ if __name__ == "__main__":
     hhs = hhs[ind]; hwnd = hwnd[ind]
     ghs_c = ghs_c[ind]; ghs_em = ghs_em[ind]
     gwnd_c = gwnd_c[ind]; gwnd_em = gwnd_em[ind]
+
+    ohs[ohs<0.]=np.nan; ohs[ohs>25.]=np.nan
+    ownd[ownd<0.]=np.nan; ownd[ownd>120.]=np.nan
 
     del ind
 
