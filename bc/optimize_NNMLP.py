@@ -4,36 +4,45 @@
 """
 optimize_NNMLP.py
 
-Hyperparameter search for the MLP-NN res_hs model, using Optuna (TPE
-sampler) with storm-grouped cross-validation (GroupKFold on cid).
+Optuna search for the MLP-NN res_hs model
 
-IMPORTANT: with solver='adam' (used throughout), scikit-learn's
-MLPRegressor IGNORES `learning_rate` (constant/invscaling/adaptive),
-`power_t`, and `momentum`/`nesterovs_momentum` -- those are sgd-only.
-They are not included in the search space below because tuning them
-would have no effect on the trained model.
+Fixed (from the first run):  activation='tanh', batch_size=128,
+                             n_iter_no_change=20, validation_fraction=0.15
+Searched:                    hidden_layer_sizes, norm_range, alpha,
+                             learning_rate_init (all in narrower ranges)
 
-What's searched instead (the parameters that actually matter for Adam):
-  - hidden_layer_sizes  (architecture)
-  - activation          (tanh / relu / logistic)
-  - normalization range for X/y ([-1,1] vs [0,1])
-  - alpha               (L2 regularization)
-  - learning_rate_init
-  - batch_size
-  - n_iter_no_change, validation_fraction (early stopping controls)
+Differences vs. the first serial script
+---------------------------------------
+1. RMSE is computed in physical units of res_hs (after inverse-transform),
+   and scalers are fit on each fold's TRAINING data only. In the first run
+   the RMSE was measured in normalized space, where a [-1, 1] target has
+   twice the range of a [0, 1] target, so '-1_1' trials had ~2x inflated
+   scores and were unfairly penalized. norm_range is therefore re-opened
+   here.
+2. The study is stored in SQLite (optuna_mlp_narrow.db): if the run is
+   interrupted, re-running the script resumes where it stopped, and nothing
+   is lost. best_mlp_params.json is rewritten every time a new best trial
+   appears.
+3. The best configuration found in the first run is enqueued as the first
+   two trials (once with each norm_range), giving a direct fair comparison
+   of '0_1' vs '-1_1' on the same configuration.
+4. Optional parallelism INSIDE each trial (N_JOBS): the 4 seeds x 3 folds
+   of one trial are run concurrently. N_JOBS = 1 gives the plain serial
+   behavior. Try N_JOBS = 12 for a speed test.
 
-Each trial's score is the MEAN validation RMSE (normalized space) across
-GroupKFold folds AND across a small set of seeds -- averaging across
-seeds, not taking the best one, so a hyperparameter set isn't rewarded
-for getting lucky with one random initialization.
-
-Output: best_mlp_params.json (feed this into the final training script),
-optuna_trials.csv (every trial's params + score), and two diagnostic
-plots (optimization history, parameter importance).
-
-No execution here -- run this on the server.
+No execution here -- run on the server.
 """
 
+# N_JOBS has to be known before numpy is imported (BLAS thread pinning)
+N_JOBS = 12          # 1 = serial (BLAS uses all cores); >1 = parallel fits, 1 BLAS thread each
+
+import os
+if N_JOBS > 1:
+    for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+               "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        os.environ[_v] = "1"
+
+import ast
 import json
 import warnings
 warnings.filterwarnings("ignore")
@@ -48,6 +57,7 @@ import netCDF4 as nc
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import GroupKFold
 from sklearn.neural_network import MLPRegressor
+from joblib import Parallel, delayed
 
 import optuna
 from optuna.samplers import TPESampler
@@ -112,25 +122,37 @@ FNAME = "TC_ModelObs_CyclInfo.nc"
 FEATURE_FILE = "FS_MLPNN_res.txt"
 TARGET = "res_hs"
 
-CV_SPLITS = 3           # fewer folds during search (speed); final training uses more
-OPT_SEEDS = (1,2,3,5,10,15)      # seeds averaged per trial (robustness, not cherry-picking)
-MAX_ITER_CAP = 10000     # early_stopping cuts this short in practice
-N_TRIALS = 150          # Optuna trials -- adjust based on available time/compute
+CV_SPLITS = 3
+OPT_SEEDS = (1, 2, 3, 5)     # seeds averaged per trial (was 6; 4 keeps the noise reasonable)
+MAX_ITER_CAP = 3000          # early_stopping cuts this short in practice
+N_TRIALS = 40                # total trials in the study (resumable)
+
+# fixed from the first run
+FIXED = dict(activation='tanh', batch_size=128,
+             n_iter_no_change=20, validation_fraction=0.15)
 
 ARCH_OPTIONS = [ (2,),(5,),(10,),(20,),(50,),(80,),(150,),
-    (5,5),(10,10),(20,20),(50,50),(80,80),(150,150),
-    (100, 100, 50), (150, 100, 50),
-]
+    (5,5),(10,10),(20,20),(50,50),(80,80),(150,150)]
 
+ALPHA_RANGE = (1e-3, 2e-2)
+LR_RANGE = (1e-4, 5e-3)
 
+# best configuration of the first run (trial 62) -> enqueued as the first trials
+BEST_FIRST_RUN = {'hidden_layer_sizes': '(20,)', 'alpha': 0.00423759670849982,
+                  'learning_rate_init': 0.0005815387120251358}
+
+STUDY_NAME = "mlp_res_hs_narrow"
+STORAGE = "sqlite:///optuna_mlp_narrow.db"
 OUT_PARAMS_JSON = "best_mlp_params.json"
-OUT_TRIALS_CSV = "optuna_trials.csv"
-OUT_HISTORY_PNG = "optuna_history.png"
-OUT_IMPORTANCE_PNG = "optuna_importance.png"
+OUT_TRIALS_CSV = "optuna_trials_narrow.csv"
+OUT_HISTORY_PNG = "optuna_history_narrow.png"
+OUT_IMPORTANCE_PNG = "optuna_importance_narrow.png"
+
+RANGE_MAP = {'-1_1': (-1, 1), '0_1': (0, 1)}
 
 
 # ============================================================
-# Load data once (module-level, reused by every trial)
+# Load data once
 # ============================================================
 
 LVARS = [
@@ -156,14 +178,40 @@ keep_cols = selected_features + [TARGET, 'cid']
 mdf = df[keep_cols].dropna(subset=selected_features + [TARGET]).reset_index(drop=True)
 print(f"{mdf.shape[0]}/{df.shape[0]} rows valid (no NaN in selected features/target)")
 
-X_raw = mdf[selected_features].values
-y_raw = mdf[TARGET].values.reshape(-1, 1)
+X_raw = mdf[selected_features].values.astype('float64')
+y_raw = mdf[TARGET].values.reshape(-1, 1).astype('float64')
 groups = mdf['cid'].values
 
-RANGE_MAP = {'-1_1': (-1, 1), '0_1': (0, 1)}
 gkf = GroupKFold(n_splits=CV_SPLITS)
-# split once (same folds reused across all trials -- fair comparison between trials)
-FOLD_INDICES = list(gkf.split(X_raw, y_raw, groups=groups))
+FOLD_INDICES = list(gkf.split(X_raw, y_raw, groups=groups))   # same folds for every trial
+
+
+# ============================================================
+# One MLP fit -> validation RMSE in physical units (m)
+# ============================================================
+
+def fit_one(X, y, tr_idx, te_idx, p, seed):
+    try:
+        rng_range = RANGE_MAP[p['norm_range']]
+        xs = MinMaxScaler(feature_range=rng_range).fit(X[tr_idx])
+        ys = MinMaxScaler(feature_range=rng_range).fit(y[tr_idx])
+
+        model = MLPRegressor(
+            hidden_layer_sizes=p['arch'], activation=p['activation'], solver='adam',
+            alpha=p['alpha'], batch_size=p['batch_size'],
+            learning_rate_init=p['learning_rate_init'],
+            max_iter=MAX_ITER_CAP, shuffle=True, random_state=seed,
+            early_stopping=True, n_iter_no_change=p['n_iter_no_change'],
+            validation_fraction=p['validation_fraction'],
+            beta_1=0.9, beta_2=0.999, epsilon=1e-08,
+        )
+        model.fit(xs.transform(X[tr_idx]), ys.transform(y[tr_idx])[:, 0])
+
+        pred_n = model.predict(xs.transform(X[te_idx]))
+        pred = ys.inverse_transform(pred_n.reshape(-1, 1))[:, 0]
+        return float(np.sqrt(np.mean((pred - y[te_idx, 0]) ** 2)))
+    except Exception:
+        return float('nan')
 
 
 # ============================================================
@@ -171,89 +219,78 @@ FOLD_INDICES = list(gkf.split(X_raw, y_raw, groups=groups))
 # ============================================================
 
 def objective(trial):
-    hidden_layer_sizes = trial.suggest_categorical(
-        'hidden_layer_sizes', [str(a) for a in ARCH_OPTIONS])  # Optuna wants hashable scalars
-    arch = eval(hidden_layer_sizes)  # back to tuple, e.g. "(100, 100)" -> (100, 100)
+    arch_str = trial.suggest_categorical('hidden_layer_sizes', [str(a) for a in ARCH_OPTIONS])
+    p = dict(FIXED)
+    p['arch'] = ast.literal_eval(arch_str)
+    p['norm_range'] = trial.suggest_categorical('norm_range', ['0_1', '-1_1'])
+    p['alpha'] = trial.suggest_float('alpha', *ALPHA_RANGE, log=True)
+    p['learning_rate_init'] = trial.suggest_float('learning_rate_init', *LR_RANGE, log=True)
 
-    activation = trial.suggest_categorical('activation', ['tanh', 'relu', 'logistic'])
-    norm_range = trial.suggest_categorical('norm_range', ['-1_1', '0_1'])
-    alpha = trial.suggest_float('alpha', 1e-6, 1e-1, log=True)
-    learning_rate_init = trial.suggest_float('learning_rate_init', 1e-5, 1e-1, log=True)
-    batch_size = trial.suggest_categorical('batch_size', ['32', '64', '128', '256', 'auto'])
-    batch_size = batch_size if batch_size == 'auto' else int(batch_size)
-    n_iter_no_change = trial.suggest_int('n_iter_no_change', 10, 30)
-    validation_fraction = trial.suggest_float('validation_fraction', 0.1, 0.2)
+    results = Parallel(n_jobs=N_JOBS)(
+        delayed(fit_one)(X_raw, y_raw, tr, te, p, seed)
+        for (tr, te) in FOLD_INDICES for seed in OPT_SEEDS)
 
-    xscaler = MinMaxScaler(feature_range=RANGE_MAP[norm_range])
-    yscaler = MinMaxScaler(feature_range=RANGE_MAP[norm_range])
-    Xn = xscaler.fit_transform(X_raw)
-    yn = yscaler.fit_transform(y_raw)[:, 0]
+    vals = np.array(results, dtype='float64')
+    if not np.isfinite(vals).all():
+        return float('nan')
+    trial.set_user_attr('rmse_std_over_fits', float(vals.std()))   # noise level of this score
+    return float(vals.mean())
 
-    fold_scores = []
-    for tr_idx, te_idx in FOLD_INDICES:
-        seed_scores = []
-        for seed in OPT_SEEDS:
-            model = MLPRegressor(
-                hidden_layer_sizes=arch, activation=activation, solver='adam',
-                alpha=alpha, batch_size=batch_size,
-                learning_rate_init=learning_rate_init,
-                max_iter=MAX_ITER_CAP, shuffle=True, random_state=seed,
-                early_stopping=True, n_iter_no_change=n_iter_no_change,
-                validation_fraction=validation_fraction,
-                beta_1=0.9, beta_2=0.999, epsilon=1e-08,
-            )
-            model.fit(Xn[tr_idx], yn[tr_idx])
-            pred = model.predict(Xn[te_idx])
-            rmse = np.sqrt(np.mean((pred - yn[te_idx]) ** 2))
-            seed_scores.append(rmse)
-        fold_scores.append(np.mean(seed_scores))
 
-    return float(np.mean(fold_scores))
+def save_best(study, trial):
+    """Rewrite best_mlp_params.json whenever a new best trial appears."""
+    if study.best_trial.number != trial.number:
+        return
+    bp = dict(study.best_params)
+    bp['hidden_layer_sizes'] = list(ast.literal_eval(bp['hidden_layer_sizes']))
+    bp.update(FIXED)
+    bp['cv_rmse_res_hs_m'] = study.best_value
+    with open(OUT_PARAMS_JSON, 'w') as f:
+        json.dump(bp, f, indent=2)
 
 
 # ============================================================
-# Run the study
+# Run
 # ============================================================
 
 if __name__ == "__main__":
 
-    study = optuna.create_study(direction='minimize', sampler=TPESampler(seed=0))
-    study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=True)
+    study = optuna.create_study(
+        study_name=STUDY_NAME, storage=STORAGE, load_if_exists=True,
+        direction='minimize', sampler=TPESampler(seed=0))
+
+    if len(study.trials) == 0:
+        # first-run best config, once per normalization -> fair '0_1' vs '-1_1' comparison
+        for nr in ('0_1', '-1_1'):
+            study.enqueue_trial({**BEST_FIRST_RUN, 'norm_range': nr})
+
+    n_finished = len([t for t in study.trials if t.state.is_finished()])
+    remaining = max(N_TRIALS - n_finished, 0)
+    print(f"{n_finished} trials already in the study; running {remaining} more "
+          f"(N_JOBS={N_JOBS}, {len(FOLD_INDICES) * len(OPT_SEEDS)} fits per trial)")
+
+    study.optimize(objective, n_trials=remaining, callbacks=[save_best])
 
     print("\nBest trial:")
-    print(f"  normalized RMSE = {study.best_value:.5f}")
+    print(f"  RMSE (res_hs units, m) = {study.best_value:.5f}")
     print(f"  params = {study.best_params}")
 
-    # reconstruct architecture tuple for the saved JSON (was stored as a
-    # string key for Optuna's categorical sampler)
-    best_params = dict(study.best_params)
-    best_params['hidden_layer_sizes'] = list(eval(best_params['hidden_layer_sizes']))
-
-    with open(OUT_PARAMS_JSON, 'w') as f:
-        json.dump(best_params, f, indent=2)
-    print(f"\nSaved best params -> {OUT_PARAMS_JSON}")
-
-    # all trials, for your own inspection / sanity-checking the search
-    trials_df = study.trials_dataframe()
-    trials_df.to_csv(OUT_TRIALS_CSV, sep='\t', index=False, float_format='%.6f')
+    study.trials_dataframe().to_csv(OUT_TRIALS_CSV, sep='\t', index=False, float_format='%.6f')
     print(f"Saved all trials  -> {OUT_TRIALS_CSV}")
 
-    # diagnostic plots
     try:
         from optuna.visualization.matplotlib import (
             plot_optimization_history, plot_param_importances)
 
-        fig = plot_optimization_history(study)
+        plot_optimization_history(study)
         plt.tight_layout()
         plt.savefig(OUT_HISTORY_PNG, dpi=200, bbox_inches='tight')
         plt.close('all')
 
-        fig = plot_param_importances(study)
+        plot_param_importances(study)
         plt.tight_layout()
         plt.savefig(OUT_IMPORTANCE_PNG, dpi=200, bbox_inches='tight')
         plt.close('all')
-
         print(f"Saved plots       -> {OUT_HISTORY_PNG}, {OUT_IMPORTANCE_PNG}")
     except Exception as e:
-        print(f"Plotting skipped ({e}); best_mlp_params.json and "
-              f"optuna_trials.csv are still saved.")
+        print(f"Plotting skipped ({e})")
