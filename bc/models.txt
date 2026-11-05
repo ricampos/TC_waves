@@ -1,0 +1,8 @@
+MLPNN
+RandomForest
+SVM
+XGBoost
+LightGBM
+CatBoost
+ElasticNet
+GaussianProcess
