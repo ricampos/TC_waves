@@ -34,7 +34,7 @@ No execution here -- run on the server.
 """
 
 # N_JOBS has to be known before numpy is imported (BLAS thread pinning)
-N_JOBS = 12          # 1 = serial (BLAS uses all cores); >1 = parallel fits, 1 BLAS thread each
+N_JOBS = 1          # 1 = serial (BLAS uses all cores); >1 = parallel fits, 1 BLAS thread each
 
 import os
 if N_JOBS > 1:
