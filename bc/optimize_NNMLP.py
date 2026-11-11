@@ -18,7 +18,6 @@ from sklearn.neural_network import MLPRegressor
 import netCDF4 as nc
 import warnings; warnings.filterwarnings("ignore")
 fnetcdf="NETCDF4"
-import warnings; warnings.filterwarnings("ignore")
 
 # Font size and style
 sl=13
@@ -148,9 +147,9 @@ def denormalization(*args):
 if __name__ == "__main__":
 
     ftag="MLPNN_res_results"
-    fpath="/home/ricardo/work/noaa/analysis/TC_Waves/4postproc/AI_ML"
+    fpath="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/4postproc/AI_ML"
     # Read Obs and Model
-    fname="/home/ricardo/work/noaa/analysis/TC_Waves/4postproc/AI_ML/TC_ModelObs_CyclInfo.nc"
+    fname="/work/noaa/marine/ricardo.campos/work/analysis/TC_waves/4postproc/AI_ML/TC_ModelObs_CyclInfo.nc"
 
     activation = ['tanh', 'relu']
     hidden_layer_sizes = [ (2,),(10,),(20,),(50,),(80,),(120,),
@@ -187,7 +186,7 @@ if __name__ == "__main__":
     ds['rmw'][ds['rmw']>300000]=np.nan
 
     # Add residue to the dataframe
-    df['res_hs'] = df['mhs'] - df['ohs']
+    df['res_hs'] = df['ohs'] - df['mhs'] 
     # print all the variables of df
     with open('df_variables.txt', 'w') as f:
         for col in df.columns:
@@ -208,7 +207,7 @@ if __name__ == "__main__":
     mop = np.array([df['res_hs']]).T
     # remove NaN
     valid = np.isfinite(mip).all(axis=1) & np.isfinite(mop).all(axis=1)
-    ohs = df['ohs'][valid]; res_hs = df['res_hs'][valid]
+    ohs = df['ohs'][valid]; mhs = df['mhs'][valid]; res_hs = df['res_hs'][valid]
     mip, mop = mip[valid], mop[valid]
     cid = df['cid'][valid]
 
@@ -257,9 +256,9 @@ if __name__ == "__main__":
     # --- Save results ---
     ftag=ftag+"_"+str(hl).zfill(2)+"_"+str(actv).zfill(2)+"_"+str(alp).zfill(2)+"_"+str(lri).zfill(2)+"_"+str(rst).zfill(2)
     np.savetxt(fpath + "/" + ftag + ".txt",
-               np.column_stack([ohs, res_hs, targv]),
+               np.column_stack([ohs, mhs, res_hs, targv]),
                fmt='%.4f', delimiter='\t',
-               header='ohs\tres_hs\ttargv', comments='')
+               header='ohs\tmhs\tres_hs\ttargv', comments='')
 
     print(" "); print(" Results saved. Done")
 

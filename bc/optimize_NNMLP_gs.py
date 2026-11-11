@@ -261,7 +261,7 @@ if __name__ == "__main__":
         print(f"  {c}: {n_bad} values > 300 km set to NaN")
 
     # residue and ccangle decomposition
-    df['res_hs'] = df['mhs'] - df['ohs']
+    df['res_hs'] = df['ohs'] - df['mhs']
     df['ccangle_sin'] = np.sin(np.deg2rad(df['ccangle']))
     df['ccangle_cos'] = np.cos(np.deg2rad(df['ccangle']))
 
@@ -351,6 +351,7 @@ if __name__ == "__main__":
         targv[indval] = denormalization(aux, normet, mopnp1, mopnp2)
 
         del aux, grid_search, best_model, model
+        print(" ")
 
     np.savez(out_npz, targv=targv, cid=cid, mhs=mhs, ohs=ohs, otime=otime)
 
